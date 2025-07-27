@@ -97,11 +97,13 @@ export default function ReviewFeed() {
                 functionName: 'fillOrder',
                 args: [ORDER_VALUE, orderSig, chunkIn, '0x'],
             });
+            // Save orderHash to sessionStorage for dashboard widgets
+            sessionStorage.setItem('orderHash', ORDER_VALUE.maker); // Replace with actual orderHash if available
             setTxHash(tx);
             setStatus('done');
             setOpen(false);
             // Navigate to dashboard, passing orderHash (tx)
-            navigate('/', { state: { orderHash: tx } });
+            navigate('/');
         } catch (err: unknown) {
             setError((err as Error)?.message || 'Error');
             setStatus('error');

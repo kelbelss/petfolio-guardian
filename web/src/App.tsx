@@ -1,16 +1,12 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, Link } from 'react-router-dom';
 import { Web3Providers } from '@/lib/wallet';
 import ConnectButton from '@/components/ConnectButton';
 import FeedWizard from './pages/dca/setup';
 import ReviewFeed from './pages/dca/review';
 import Confirmation from './pages/dca/confirmation';
+import Dashboard from './pages/dashboard';
 
 // stub pages for now
-const Dashboard = () => (
-  <div className="max-w-3xl w-full mx-auto px-4 py-6">
-    <p className="text-2xl">Dashboard coming soon…</p>
-  </div>
-);
 const Setup = () => (
   <div className="max-w-3xl w-full mx-auto px-4 py-6">
     <p className="text-2xl">Guardian setup wizard…</p>
@@ -27,9 +23,9 @@ export default function App() {
     <Web3Providers>
       <div className="min-h-screen flex flex-col bg-gray-950 text-gray-200">
         <header className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
-          <h1 className="text-xl font-bold text-emerald-400">
+          <Link to="/" className="text-xl font-bold text-emerald-400">
             🐾 Petfolio Guardian
-          </h1>
+          </Link>
           <ConnectButton />
         </header>
 
