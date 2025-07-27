@@ -66,26 +66,28 @@ contract TwapDcaHook is IInteractionNotificationReceiver {
      * @param data ABI‑encoded `TwapParams` struct from `order.interaction`.
      */
     function preInteraction(bytes calldata data) external onlyLOP {
+        // decode data (order.interaction) into the TwapParams struct
         TwapParams memory params = abi.decode(data, (TwapParams));
-
-        // use the passed in orderHash directly
+        // pull out the orderHash key directly
         bytes32 orderHash = params.orderHash;
 
+        // time-gate check
         uint64 allowedAt = nextFillTime[orderHash];
         if (allowedAt != 0 && block.timestamp < allowedAt) {
             revert TooEarly(block.timestamp, allowedAt);
         }
 
-        // execute router swap & token transfers, enforcing `minOut`.
+        // execute router swap & token transfers
 
-        // 1) Decode the Permit2 signature data
+        // 1) Pull srcToken from user (Permit2)
         IPermit2(params.permit2).permitTransferFrom(params.permit2Data);
-
-        // 2) pull the chunk of srcToken from user -  single-transaction approval + swap flow
         IAllowanceTransfer(params.permit2).transferFrom(params.srcToken, params.user, address(this), params.chunkIn);
 
+        // 2) approve the router to spend this chunk - gives the router permission to pull chunkIn of srcToken from hook for the swap
+        IERC20(params.srcToken).safeApprove(params.router, params.chunkIn);
+
         // 3) build the typed SwapDescription
-        IAggregationRouterV6.SwapDescription memory desc = IAggregationRouterV6.SwapDescription({
+        IAggregationRouterV6.SwapDescription memory description = IAggregationRouterV6.SwapDescription({
             srcToken: IERC20(params.srcToken),
             dstToken: IERC20(params.dstToken),
             srcReceiver: payable(address(this)),
@@ -96,21 +98,24 @@ contract TwapDcaHook is IInteractionNotificationReceiver {
             permit: "" // if you use ERC-20 permits, include them
         });
 
-        // 4) wxecute the swap
+        // 4) execute the swap - returns how many dstToken units were actually received and gasLeft
         (uint256 received,) = IAggregationRouterV6(params.router).swap(
             address(this), // executor
-            desc,
-            params.swapCalldata // API‐generated routing data
+            description,
+            params.swapCalldata
         );
-        // reset the approval to 0 to prevent re-entrancy
+
+        // 5. reset the allowance to 0 to prevent re-entrancy
         IERC20(params.srcToken).safeApprove(params.router, 0);
 
-        // 5) enforce slippage guard
+        // 5) enforce slippage guard - ensures the router delivered at least minOut amount
         if (received < params.minOut) revert SwapFailed();
 
+        // 6) update the next fill time for this order
         uint64 newNextFillTime = uint64(block.timestamp) + params.intervalSecs;
         nextFillTime[orderHash] = newNextFillTime;
 
+        // 7) emit event
         emit TwapDcaExecuted(orderHash, params.chunkIn, params.minOut, newNextFillTime);
     }
 
