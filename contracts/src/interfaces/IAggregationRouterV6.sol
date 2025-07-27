@@ -4,7 +4,7 @@ pragma solidity ^0.8.17;
 // --- Minimal 1inch Aggregation Router v6 interface
 // Just the pieces needed for hooks and tests
 
-import {IERC20} from "openzeppelin/token/ERC20/IERC20.sol";
+import {IERC20} from "../../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 
 interface IAggregationRouterV6 {
     // --- Structs ---
