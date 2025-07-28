@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.17;
+pragma solidity ^0.8.29;
 
 // --- Minimal 1inch Aggregation Router v6 interface
 // Just the pieces needed for hooks and tests
