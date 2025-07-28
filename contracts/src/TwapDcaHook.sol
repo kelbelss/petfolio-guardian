@@ -23,6 +23,7 @@ contract TwapDcaHook is IInteractionNotificationReceiver {
 
     // --- Errors ---
     error OnlyLimitOrderProtocol();
+    error InvalidOrderHash();
     error TooEarly(uint256 currentTime, uint256 allowedTime);
     error SwapFailed();
 
@@ -34,9 +35,10 @@ contract TwapDcaHook is IInteractionNotificationReceiver {
     mapping(bytes32 => uint64) public nextFillTime;
 
     /// @dev Immutable params packed into `order.interaction`
-    /// TODO: currently trusting maker-provided orderHash, implement on-chain derivation or verification before prod
+    // I want to abi decode the data from interactions that LOP sends hook to verify it
     struct TwapParams {
-        bytes32 orderHash; // Unique ID for this order (EIP-712 hash)
+        bytes rawOrder; // abi.encode(LimitOrder) blob
+        bytes32 orderHash; // maker’s EIP-712 hash (must match rawOrder)
         address user; // Wallet DCA‑ing for
         uint64 intervalSecs; // Minimum seconds between fills
         uint256 chunkIn; // Maker amount per fill
@@ -68,11 +70,11 @@ contract TwapDcaHook is IInteractionNotificationReceiver {
     function preInteraction(bytes calldata data) external onlyLOP {
         // decode data (order.interaction) into the TwapParams struct
         TwapParams memory params = abi.decode(data, (TwapParams));
-        // pull out the orderHash key directly
-        bytes32 orderHash = params.orderHash;
+        // verify the orderHash matches the rawOrder
+        bytes32 verifiedHash = _verifyOrderHash(params.rawOrder, params.orderHash);
 
         // time-gate check
-        uint64 allowedAt = nextFillTime[orderHash];
+        uint64 allowedAt = nextFillTime[verifiedHash];
         if (allowedAt != 0 && block.timestamp < allowedAt) {
             revert TooEarly(block.timestamp, allowedAt);
         }
@@ -83,8 +85,10 @@ contract TwapDcaHook is IInteractionNotificationReceiver {
         IPermit2(params.permit2).permitTransferFrom(params.permit2Data);
         IAllowanceTransfer(params.permit2).transferFrom(params.srcToken, params.user, address(this), params.chunkIn);
 
+        // @dev permit2 will revert if insufficient balance
+
         // 2) approve the router to spend this chunk - gives the router permission to pull chunkIn of srcToken from hook for the swap
-        IERC20(params.srcToken).safeApprove(params.router, params.chunkIn);
+        IERC20(params.srcToken).forceApprove(params.router, params.chunkIn);
 
         // 3) build the typed SwapDescription
         IAggregationRouterV6.SwapDescription memory description = IAggregationRouterV6.SwapDescription({
@@ -106,19 +110,24 @@ contract TwapDcaHook is IInteractionNotificationReceiver {
         );
 
         // 5. reset the allowance to 0 to prevent re-entrancy
-        IERC20(params.srcToken).safeApprove(params.router, 0);
+        IERC20(params.srcToken).forceApprove(params.router, 0);
 
         // 5) enforce slippage guard - ensures the router delivered at least minOut amount
         if (received < params.minOut) revert SwapFailed();
 
         // 6) update the next fill time for this order
         uint64 newNextFillTime = uint64(block.timestamp) + params.intervalSecs;
-        nextFillTime[orderHash] = newNextFillTime;
+        nextFillTime[verifiedHash] = newNextFillTime;
 
         // 7) emit event
-        emit TwapDcaExecuted(orderHash, params.chunkIn, params.minOut, newNextFillTime);
+        emit TwapDcaExecuted(verifiedHash, params.chunkIn, params.minOut, newNextFillTime);
     }
 
     /// @notice Post‑interaction hook (unused in v1 at this stage)
     function postInteraction(bytes calldata /*data*/ ) external onlyLOP {}
+
+    function _verifyOrderHash(bytes memory rawOrder, bytes32 claimed) internal pure returns (bytes32 verifiedHash) {
+        verifiedHash = keccak256(rawOrder);
+        if (verifiedHash != claimed) revert InvalidOrderHash();
+    }
 }
