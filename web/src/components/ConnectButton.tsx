@@ -3,22 +3,27 @@ import { useAccount, useConnect, useDisconnect } from 'wagmi';
 
 export default function ConnectButton() {
     const { address, isConnected } = useAccount();
-    const { connect, connectors, isLoading, pendingConnector } = useConnect();
+    const { connect, connectors, isPending } = useConnect();
     const { disconnect } = useDisconnect();
 
     if (isConnected)
         return (
-            <Button variant="secondary" onClick={() => disconnect()}>
-                {address.slice(0, 6)}…{address.slice(-4)} (Disconnect)
+            <Button
+                variant="outline"
+                onClick={() => disconnect()}
+                className="bg-white border-green-200 text-green-600 hover:bg-green-50 hover:border-green-300"
+            >
+                {address?.slice(0, 6)}…{address?.slice(-4)} (Disconnect)
             </Button>
         );
 
     return (
         <Button
             onClick={() => connect({ connector: connectors[0] })}
-            disabled={isLoading}
+            disabled={isPending}
+            className="bg-emerald-400 hover:bg-emerald-500 text-white shadow-sm hover:shadow-md transition-all"
         >
-            {isLoading && pendingConnector?.name ? 'Connecting…' : 'Connect Wallet'}
+            {isPending ? 'Connecting…' : 'Connect Wallet'}
         </Button>
     );
 }
