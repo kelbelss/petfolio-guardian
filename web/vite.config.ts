@@ -5,20 +5,7 @@ import { nodePolyfills } from 'vite-plugin-node-polyfills';
 export default defineConfig({
   plugins: [react(), nodePolyfills()],
   server: {
-    proxy: {
-      // Proxy requests starting with /api/1inch to the real 1inch API
-      '/api/1inch': {
-        target: 'https://api.1inch.dev',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/1inch/, ''),
-        configure: (proxy) => {
-          proxy.on('proxyReq', (proxyReq, req) => {
-            // Log the request for debugging
-            console.log('Proxying request to 1inch:', req.url);
-          });
-        },
-      },
-    },
+    // No longer need local proxy since we're using Vercel proxy
   },
   resolve: {
     alias: {

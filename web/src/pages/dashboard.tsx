@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { formatEther, parseEther } from 'viem';
 import { Button } from '@/components/ui/button';
 import { useActiveOrder } from '../lib/useActiveOrder';
+import { CONTRACT_ADDRESSES } from '@/lib/constants';
 
 type TwapDcaExecutedArgs = {
     orderHash: string;
@@ -12,8 +13,9 @@ type TwapDcaExecutedArgs = {
     nextFillTime: bigint;
 };
 
-// TODO: Replace with actual deployed address and ABI
-const HOOK_ADDRESS = '0x0000000000000000000000000000000000000000';
+// TODO: Replace with actual deployed contract address and ABI
+// This should point to your deployed TWAP DCA contract
+const HOOK_ADDRESS = CONTRACT_ADDRESSES.TWAP_DCA;
 const HOOK_ABI = [
     {
         type: 'function',
@@ -312,7 +314,7 @@ function FeedHistoryChart({ orderHash, disabled }: { orderHash: string; disabled
     const startTime = timeRange > 0 ? Math.min(...chartData.map(d => d.timestamp)) : now - 86400000;
 
     // Generate points for the line
-    const points = chartData.map((d, i) => {
+    const points = chartData.map((d) => {
         const x = padding + (d.timestamp - startTime) / timeRange * chartWidth;
         const y = height - padding - (Number(formatEther(d.amountOut)) - minAmount) / amountRange * chartHeight;
         return `${x},${y}`;

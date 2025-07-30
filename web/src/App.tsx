@@ -2,10 +2,14 @@ import { Routes, Route, Navigate, Link } from 'react-router-dom';
 import { Web3Providers } from '@/lib/wallet';
 import ConnectButton from '@/components/ConnectButton';
 import { Button } from '@/components/ui/button';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { FallbackWarning } from '@/components/ui/fallback-warning';
 import FeedWizard from './pages/dca/setup';
 import ReviewFeed from './pages/dca/review';
 import Confirmation from './pages/dca/confirmation';
 import Dashboard from './pages/dashboard';
+import BalanceTestPage from './pages/balance-test';
+
 
 // stub pages for now
 const Setup = () => (
@@ -37,16 +41,22 @@ export default function App() {
           </div>
         </header>
 
+        {/* Global Fallback Warning */}
+        <FallbackWarning className="mx-6 mt-4" />
+
         <main className="flex-1 w-full">
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/setup" element={<Setup />} />
-            <Route path="/setup/feed" element={<FeedWizard />} />
-            <Route path="/setup/feed/review" element={<ReviewFeed />} />
-            <Route path="/setup/feed/confirmation" element={<Confirmation />} />
-            <Route path="/activity" element={<ActivityContainer />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
+          <ErrorBoundary>
+            <Routes>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/setup" element={<Setup />} />
+              <Route path="/balance-test" element={<BalanceTestPage />} />
+              <Route path="/setup/feed" element={<FeedWizard />} />
+              <Route path="/setup/feed/review" element={<ReviewFeed />} />
+              <Route path="/setup/feed/confirmation" element={<Confirmation />} />
+              <Route path="/activity" element={<ActivityContainer />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </ErrorBoundary>
         </main>
       </div>
     </Web3Providers>
