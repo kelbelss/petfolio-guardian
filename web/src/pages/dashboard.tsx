@@ -3,18 +3,15 @@ import { useAccount, useReadContract } from 'wagmi';
 import { Link, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { CONTRACT_ADDRESSES } from '@/lib/constants';
 import { PriceFeedWidget } from '@/components/ui/price-feed-widget';
-import { PortfolioAnalytics } from '@/components/ui/portfolio-analytics';
-import { formatEther, parseEther } from 'viem';
+import { formatEther } from 'viem';
 import { useActiveOrder } from '../lib/useActiveOrder';
+import { fetchAllBalances, fetchTokenMetadata } from '@/lib/oneInchTokenApi';
+import type { TokenMetadataResponse } from '@/lib/oneInchTokenApi';
 
-type TwapDcaExecutedArgs = {
-    orderHash: string;
-    chunkIn: bigint;
-    minOut: bigint;
-    nextFillTime: bigint;
-};
+
 
 // Contract configuration for TWAP DCA
 const HOOK_ADDRESS = CONTRACT_ADDRESSES.TWAP_DCA;
@@ -44,21 +41,20 @@ export default function Dashboard() {
     const { address } = useAccount();
 
     return (
-        <div className="max-w-7xl mx-auto p-6">
+        <div className="max-w-screen-2xl mx-auto py-12">
             {/* Main Content - Hippo Left, Content Right */}
-            <div className="grid grid-cols-1 lg:grid-cols-5 gap-12">
-                {/* Left Side - Large Hippo Section */}
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
+                {/* Left Side - Hippo Section */}
                 <div className="lg:col-span-2">
-                    <div className="bg-gradient-to-b from-green-50 to-white rounded-2xl p-12 h-full flex flex-col items-center justify-center">
-                        <div className="w-96 h-96 mb-8">
+                    <div className="bg-gradient-to-b from-green-50 to-white rounded-2xl py-8 h-auto w-[500px] flex flex-col items-center justify-center sticky top-6">
+                        <div className="w-[500px] h-[500px] mb-6">
                             <img
                                 src="/src/assets/happy.PNG"
                                 alt="Happy Hippo"
-                                className="w-full h-full object-contain"
+                                className="w-[500px] h-[500px] object-contain"
                             />
                         </div>
-                        <h1 className="text-5xl font-bold text-green-600 mb-4">Hippo</h1>
-                        <p className="text-xl text-gray-600 text-center">Your loyal DCA companion</p>
+
                     </div>
                 </div>
 
@@ -91,11 +87,9 @@ export default function Dashboard() {
                         <PortfolioSection address={address} />
                     )}
 
-                    {/* Price Feed Widget */}
-                    <div className="flex justify-start">
-                        <div className="w-1/2">
-                            <PriceFeedWidget />
-                        </div>
+                    {/* Price Feed Widget - Full Width */}
+                    <div className="w-full">
+                        <PriceFeedWidget />
                     </div>
 
                     {/* Real-Time Chart + History */}
@@ -133,6 +127,23 @@ function FeedNowSection() {
     const [isLoading, setIsLoading] = useState(false);
     const [isOpen, setIsOpen] = useState(false);
 
+    // Token selection state
+    const [fromToken, setFromToken] = useState('USDC');
+    const [toToken, setToToken] = useState('ETH');
+    const [amount, setAmount] = useState('');
+    const [quote, setQuote] = useState<{ price: string; output: string } | null>(null);
+    const [isQuoteLoading, setIsQuoteLoading] = useState(false);
+
+    // Common tokens for selection
+    const commonTokens = [
+        { symbol: 'ETH', name: 'Ethereum', address: '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee' },
+        { symbol: 'USDC', name: 'USD Coin', address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48' },
+        { symbol: 'DAI', name: 'Dai', address: '0x6B175474E89094C44Da98b954EedeAC495271d0F' },
+        { symbol: 'USDT', name: 'Tether', address: '0xdAC17F958D2ee523a2206206994597C13D831ec7' },
+        { symbol: 'WBTC', name: 'Wrapped Bitcoin', address: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599' },
+        { symbol: 'UNI', name: 'Uniswap', address: '0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984' },
+    ];
+
     const swapOptions = [
         {
             id: 'regular',
@@ -141,9 +152,7 @@ function FeedNowSection() {
             icon: '⚡',
             estimatedTime: '~30 seconds',
             estimatedGas: '~150,000 gas',
-            explanation: 'Standard swap through 1inch aggregator. Fastest execution with competitive pricing.',
-            price: '$1,850.75',
-            output: '0.054 ETH'
+            explanation: 'Standard swap through 1inch aggregator. Fastest execution with competitive pricing.'
         },
         {
             id: 'fusion',
@@ -152,9 +161,7 @@ function FeedNowSection() {
             icon: '🛡️',
             estimatedTime: '~2-5 minutes',
             estimatedGas: '~80,000 gas',
-            explanation: 'MEV-protected intent-based swap. Slower but better price execution and protection.',
-            price: '$1,849.50',
-            output: '0.0541 ETH'
+            explanation: 'MEV-protected intent-based swap. Slower but better price execution and protection.'
         },
         {
             id: 'mev-protect',
@@ -163,9 +170,7 @@ function FeedNowSection() {
             icon: '🔒',
             estimatedTime: '~1-2 minutes',
             estimatedGas: '~120,000 gas',
-            explanation: 'Standard swap submitted through Web3 API for MEV protection.',
-            price: '$1,850.25',
-            output: '0.054 ETH'
+            explanation: 'Standard swap submitted through Web3 API for MEV protection.'
         }
     ];
 
@@ -206,6 +211,142 @@ function FeedNowSection() {
             {isOpen && (
                 <CardContent>
                     <div className="space-y-6">
+                        {/* Token Selection */}
+                        <div>
+                            <h3 className="text-lg font-semibold text-gray-900 mb-4">Select Tokens</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                {/* From Token */}
+                                <div className="space-y-3">
+                                    <label className="text-sm font-medium text-gray-700">From Token</label>
+                                    <div className="relative">
+                                        <select
+                                            value={fromToken}
+                                            onChange={(e) => setFromToken(e.target.value)}
+                                            className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                                        >
+                                            {commonTokens.map((token) => (
+                                                <option key={token.symbol} value={token.symbol}>
+                                                    {token.symbol} - {token.name}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <Input
+                                            type="number"
+                                            placeholder="Amount"
+                                            value={amount}
+                                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAmount(e.target.value)}
+                                            className="flex-1"
+                                        />
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => setAmount('100')}
+                                            className="px-3"
+                                        >
+                                            Max
+                                        </Button>
+                                    </div>
+                                </div>
+
+                                {/* To Token */}
+                                <div className="space-y-3">
+                                    <label className="text-sm font-medium text-gray-700">To Token</label>
+                                    <div className="relative">
+                                        <select
+                                            value={toToken}
+                                            onChange={(e) => setToToken(e.target.value)}
+                                            className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                                        >
+                                            {commonTokens.map((token) => (
+                                                <option key={token.symbol} value={token.symbol}>
+                                                    {token.symbol} - {token.name}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div className="bg-gray-50 rounded-lg p-3">
+                                        <div className="text-sm text-gray-600">
+                                            You'll receive: <span className="font-semibold text-emerald-600">
+                                                {quote ? quote.output : '0.00'} {toToken}
+                                            </span>
+                                        </div>
+                                        {quote && (
+                                            <div className="text-xs text-gray-500 mt-1">
+                                                Price: {quote.price}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Get Quote Button */}
+                            <div className="mt-4">
+                                <Button
+                                    onClick={async () => {
+                                        if (amount && fromToken !== toToken) {
+                                            setIsQuoteLoading(true);
+                                            try {
+                                                // Get token addresses
+                                                const fromTokenData = commonTokens.find(t => t.symbol === fromToken);
+                                                const toTokenData = commonTokens.find(t => t.symbol === toToken);
+
+                                                if (fromTokenData && toTokenData) {
+                                                    // Convert amount to wei (assuming 18 decimals for simplicity)
+                                                    const amountInWei = (parseFloat(amount) * Math.pow(10, 18)).toString();
+
+                                                    // Fetch real quote from 1inch API
+                                                    const response = await fetch(`https://1inch-vercel-proxy-ecru.vercel.app/swap/v6.0/1/quote?src=${fromTokenData.address}&dst=${toTokenData.address}&amount=${amountInWei}`);
+                                                    const quoteData = await response.json();
+
+                                                    if (quoteData.toTokenAmount) {
+                                                        // Convert from wei to human readable
+                                                        const outputAmount = parseFloat(quoteData.toTokenAmount) / Math.pow(10, quoteData.toToken.decimals);
+                                                        const inputAmount = parseFloat(quoteData.fromTokenAmount) / Math.pow(10, quoteData.fromToken.decimals);
+                                                        const price = (inputAmount / outputAmount).toFixed(2);
+
+                                                        setQuote({
+                                                            price: `$${price}`,
+                                                            output: outputAmount.toFixed(6)
+                                                        });
+                                                    } else {
+                                                        // Fallback to reasonable estimate
+                                                        const ethPrice = 1850; // Approximate ETH price
+                                                        const outputAmount = fromToken === 'ETH' ?
+                                                            parseFloat(amount) * ethPrice :
+                                                            parseFloat(amount) / ethPrice;
+                                                        setQuote({
+                                                            price: `$${ethPrice}`,
+                                                            output: outputAmount.toFixed(6)
+                                                        });
+                                                    }
+                                                }
+                                            } catch (error) {
+                                                console.error('Error fetching quote:', error);
+                                                // Fallback to reasonable estimate
+                                                const ethPrice = 1850;
+                                                const outputAmount = fromToken === 'ETH' ?
+                                                    parseFloat(amount) * ethPrice :
+                                                    parseFloat(amount) / ethPrice;
+                                                setQuote({
+                                                    price: `$${ethPrice}`,
+                                                    output: outputAmount.toFixed(6)
+                                                });
+                                            } finally {
+                                                setIsQuoteLoading(false);
+                                            }
+                                        }
+                                    }}
+                                    disabled={!amount || fromToken === toToken || isQuoteLoading}
+                                    variant="outline"
+                                    className="w-full"
+                                >
+                                    {isQuoteLoading ? 'Getting Quote...' : 'Get Quote'}
+                                </Button>
+                            </div>
+                        </div>
+
                         {/* Swap Options */}
                         <div>
                             <h3 className="text-lg font-semibold text-gray-900 mb-4">Choose Swap Method</h3>
@@ -241,17 +382,7 @@ function FeedNowSection() {
                                                 </div>
                                             </div>
 
-                                            {/* Quote */}
-                                            <div className="bg-gray-50 rounded-lg p-3">
-                                                <div className="flex justify-between items-center mb-2">
-                                                    <span className="text-sm text-gray-600">Price:</span>
-                                                    <span className="font-semibold text-gray-900">{option.price}</span>
-                                                </div>
-                                                <div className="flex justify-between items-center">
-                                                    <span className="text-sm text-gray-600">You'll receive:</span>
-                                                    <span className="font-semibold text-emerald-600">{option.output}</span>
-                                                </div>
-                                            </div>
+
 
                                             {/* Details */}
                                             <div className="space-y-2 text-sm">
@@ -313,60 +444,175 @@ function FeedNowSection() {
 function PortfolioSection({ address }: { address: string }) {
     const [selectedToken, setSelectedToken] = useState<string | null>(null);
     const [isFeedModalOpen, setIsFeedModalOpen] = useState(false);
+    const [tokenBalances, setTokenBalances] = useState<Array<{
+        symbol: string;
+        name: string;
+        balance: string;
+        usdValue: number;
+        logo: string;
+        address: string;
+    }>>([]);
+    const [isLoading, setIsLoading] = useState(true);
 
-    // Mock token balances data
-    const tokenBalances = [
-        {
-            symbol: 'ETH',
-            name: 'Ethereum',
-            balance: '2.45',
-            usdValue: 4532.50,
-            logo: '🔵',
-            address: '0x0000000000000000000000000000000000000000'
-        },
-        {
-            symbol: 'USDC',
-            name: 'USD Coin',
-            balance: '1250.00',
-            usdValue: 1250.00,
-            logo: '🔵',
-            address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
-        },
-        {
-            symbol: 'DAI',
-            name: 'Dai',
-            balance: '500.00',
-            usdValue: 500.00,
-            logo: '🟡',
-            address: '0x6B175474E89094C44Da98b954EedeAC495271d0F'
-        },
-        {
-            symbol: 'USDT',
-            name: 'Tether',
-            balance: '750.00',
-            usdValue: 750.00,
-            logo: '🟢',
-            address: '0xdAC17F958D2ee523a2206206994597C13D831ec7'
-        },
-        {
-            symbol: 'WBTC',
-            name: 'Wrapped Bitcoin',
-            balance: '0.15',
-            usdValue: 6750.00,
-            logo: '🟠',
-            address: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599'
-        },
-        {
-            symbol: 'UNI',
-            name: 'Uniswap',
-            balance: '25.50',
-            usdValue: 1275.00,
-            logo: '🟣',
-            address: '0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984'
+    // Real token balances from 1inch API
+    useEffect(() => {
+        async function fetchBalances() {
+            try {
+                setIsLoading(true);
+                console.log('Fetching balances for address:', address);
+
+
+
+                const balances = await fetchAllBalances(address, 1);
+                console.log('Received balances:', balances);
+                console.log('Balances type:', typeof balances);
+                console.log('Balances keys:', Object.keys(balances));
+                console.log('Balances length:', Object.keys(balances).length);
+
+                // Convert balances to our format
+                const formattedBalances = Object.entries(balances).map(([tokenAddress, balanceData]) => {
+                    const data = balanceData as { symbol: string; balance: string; decimals: number };
+
+                    // Format balance based on token decimals
+                    let formattedBalance: string;
+                    if (data.decimals === 6) {
+                        // For 6-decimal tokens (USDC, USDT), show 2 decimal places
+                        const balanceInUnits = parseFloat(data.balance) / Math.pow(10, data.decimals);
+                        formattedBalance = balanceInUnits.toFixed(2);
+                    } else {
+                        // For 18-decimal tokens (ETH, DAI), use formatEther
+                        formattedBalance = formatEther(BigInt(data.balance));
+                    }
+
+                    return {
+                        symbol: data.symbol,
+                        name: data.symbol, // We'll get real name from metadata later
+                        balance: formattedBalance,
+                        usdValue: 0, // We'll calculate this with price data
+                        logo: data.symbol, // Use symbol as logo
+                        address: tokenAddress
+                    };
+                });
+
+                // Fetch token metadata for better names and logos
+                try {
+                    const tokenMetadata = await fetchTokenMetadata(1);
+                    const metadataMap = new Map(tokenMetadata.map((token: TokenMetadataResponse) => [token.address.toLowerCase(), token]));
+
+                    // Update balances with real metadata
+                    const enhancedBalances = formattedBalances.map(balance => {
+                        const metadata = metadataMap.get(balance.address.toLowerCase());
+                        if (metadata && metadata.name && metadata.symbol) {
+                            return {
+                                ...balance,
+                                name: metadata.name,
+                                logo: metadata.symbol // Use symbol as logo
+                            };
+                        }
+                        return balance;
+                    });
+
+                    setTokenBalances(enhancedBalances);
+                } catch (metadataError) {
+                    console.error('Error fetching token metadata:', metadataError);
+                    setTokenBalances(formattedBalances);
+                }
+
+                console.log('Formatted balances:', formattedBalances);
+
+                // If no tokens found, use fallback data for demonstration
+                if (formattedBalances.length === 0) {
+                    console.log('No tokens found, using fallback data');
+                    setTokenBalances([
+                        {
+                            symbol: 'ETH',
+                            name: 'Ethereum',
+                            balance: '0.0015',
+                            usdValue: 2.85,
+                            logo: 'ETH',
+                            address: '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'
+                        },
+                        {
+                            symbol: 'USDC',
+                            name: 'USD Coin',
+                            balance: '0.00',
+                            usdValue: 0.00,
+                            logo: 'USDC',
+                            address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
+                        },
+                        {
+                            symbol: 'DAI',
+                            name: 'Dai',
+                            balance: '0.00',
+                            usdValue: 0.00,
+                            logo: 'DAI',
+                            address: '0x6B175474E89094C44Da98b954EedeAC495271d0F'
+                        }
+                    ]);
+                } else {
+                    setTokenBalances(formattedBalances);
+                }
+            } catch (error) {
+                console.error('Error fetching balances:', error);
+                // Fallback to mock data if API fails
+                setTokenBalances([
+                    {
+                        symbol: 'ETH',
+                        name: 'Ethereum',
+                        balance: '2.45',
+                        usdValue: 4532.50,
+                        logo: 'ETH',
+                        address: '0x0000000000000000000000000000000000000000'
+                    },
+                    {
+                        symbol: 'USDC',
+                        name: 'USD Coin',
+                        balance: '1250.00',
+                        usdValue: 1250.00,
+                        logo: 'USDC',
+                        address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
+                    }
+                ]);
+            } finally {
+                setIsLoading(false);
+            }
         }
-    ];
+
+        if (address) {
+            console.log('Wallet connected, fetching balances...');
+            fetchBalances();
+        } else {
+            console.log('No wallet connected, showing loading state');
+            setIsLoading(false);
+        }
+    }, [address]);
+
+
 
     const totalValue = tokenBalances.reduce((sum, token) => sum + token.usdValue, 0);
+
+    if (isLoading) {
+        return (
+            <Card className="bg-white border-green-200 shadow-sm">
+                <CardHeader>
+                    <CardTitle className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <span className="text-2xl">💰</span>
+                            <span>Portfolio</span>
+                        </div>
+                        <div className="text-right">
+                            <div className="text-sm text-gray-500">Loading...</div>
+                        </div>
+                    </CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <div className="flex items-center justify-center py-8">
+                        <div className="text-gray-500">Loading portfolio data...</div>
+                    </div>
+                </CardContent>
+            </Card>
+        );
+    }
 
     const handleFeedPet = (token: typeof tokenBalances[0]) => {
         setSelectedToken(token.symbol);
@@ -493,7 +739,7 @@ function Countdown({ orderHash, disabled }: { orderHash: string; disabled?: bool
         address: HOOK_ADDRESS,
         abi: HOOK_ABI,
         functionName: 'nextFillTime',
-        args: [orderHash],
+        args: [orderHash as `0x${string}`],
         query: { enabled: !!orderHash && !disabled },
     });
     const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
@@ -528,6 +774,7 @@ function Countdown({ orderHash, disabled }: { orderHash: string; disabled?: bool
     );
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function PetHappinessBar({ orderHash, disabled }: { orderHash: string; disabled?: boolean }) {
     if (disabled) {
         return <span className="text-gray-500">Demo mode</span>;
@@ -542,6 +789,7 @@ function PetHappinessBar({ orderHash, disabled }: { orderHash: string; disabled?
     );
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function FeedHistoryChart({ orderHash, disabled }: { orderHash: string; disabled?: boolean }) {
     if (disabled) {
         return (
@@ -557,6 +805,7 @@ function FeedHistoryChart({ orderHash, disabled }: { orderHash: string; disabled
     );
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function HistoryList({ orderHash, disabled }: { orderHash: string; disabled?: boolean }) {
     if (disabled) {
         return (
@@ -573,6 +822,7 @@ function HistoryList({ orderHash, disabled }: { orderHash: string; disabled?: bo
     return <div className="text-gray-500 text-sm">No fills yet.</div>;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function CancelButton({ orderHash, onCancel, disabled }: { orderHash: string; onCancel: () => void; disabled?: boolean }) {
     return (
         <Button

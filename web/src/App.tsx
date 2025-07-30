@@ -1,5 +1,5 @@
 import { Routes, Route, Navigate, Link } from 'react-router-dom';
-import { Web3Providers } from '@/lib/wallet';
+import { Web3Providers } from '@/lib/wagmi';
 import ConnectButton from '@/components/ConnectButton';
 import { Button } from '@/components/ui/button';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
@@ -7,8 +7,10 @@ import FeedWizard from './pages/dca/setup';
 import ReviewFeed from './pages/dca/review';
 import Confirmation from './pages/dca/confirmation';
 import Dashboard from './pages/dashboard';
-import BalanceTestPage from './pages/balance-test';
 import AdvancedOrders from './pages/advanced-orders';
+
+
+
 
 export default function App() {
   return (
@@ -19,16 +21,19 @@ export default function App() {
             🐾 Petfolio Guardian
           </Link>
           <div className="flex items-center gap-4">
-            <Link to="/balance-test">
+            <Link to="/">
               <Button variant="outline" className="text-gray-700">
-                Balance Test
+                Dashboard
               </Button>
             </Link>
             <Link to="/advanced-orders">
               <Button variant="outline" className="text-gray-700">
-                Orders
+                Analytics
               </Button>
             </Link>
+
+
+
             <Link to="/setup/feed">
               <Button className="bg-emerald-400 hover:bg-emerald-500 text-white shadow-sm hover:shadow-md transition-all">
                 Start New DCA
@@ -42,8 +47,10 @@ export default function App() {
           <ErrorBoundary>
             <Routes>
               <Route path="/" element={<Dashboard />} />
-              <Route path="/balance-test" element={<BalanceTestPage />} />
               <Route path="/advanced-orders" element={<AdvancedOrders />} />
+
+
+
               <Route path="/setup/feed" element={<FeedWizard />} />
               <Route path="/setup/feed/review" element={<ReviewFeed />} />
               <Route path="/setup/feed/confirmation" element={<Confirmation />} />
