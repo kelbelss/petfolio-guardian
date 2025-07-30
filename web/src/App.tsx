@@ -3,25 +3,12 @@ import { Web3Providers } from '@/lib/wallet';
 import ConnectButton from '@/components/ConnectButton';
 import { Button } from '@/components/ui/button';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
-import { FallbackWarning } from '@/components/ui/fallback-warning';
 import FeedWizard from './pages/dca/setup';
 import ReviewFeed from './pages/dca/review';
 import Confirmation from './pages/dca/confirmation';
 import Dashboard from './pages/dashboard';
 import BalanceTestPage from './pages/balance-test';
-
-
-// stub pages for now
-const Setup = () => (
-  <div className="max-w-3xl w-full mx-auto px-4 py-6">
-    <p className="text-2xl">Guardian setup wizard…</p>
-  </div>
-);
-const ActivityContainer = () => (
-  <div className="max-w-3xl w-full mx-auto px-4 py-6">
-    <p className="text-2xl">Recent actions…</p>
-  </div>
-);
+import AdvancedOrders from './pages/advanced-orders';
 
 export default function App() {
   return (
@@ -32,6 +19,16 @@ export default function App() {
             🐾 Petfolio Guardian
           </Link>
           <div className="flex items-center gap-4">
+            <Link to="/balance-test">
+              <Button variant="outline" className="text-gray-700">
+                Balance Test
+              </Button>
+            </Link>
+            <Link to="/advanced-orders">
+              <Button variant="outline" className="text-gray-700">
+                Orders
+              </Button>
+            </Link>
             <Link to="/setup/feed">
               <Button className="bg-emerald-400 hover:bg-emerald-500 text-white shadow-sm hover:shadow-md transition-all">
                 Start New DCA
@@ -41,19 +38,15 @@ export default function App() {
           </div>
         </header>
 
-        {/* Global Fallback Warning */}
-        <FallbackWarning className="mx-6 mt-4" />
-
         <main className="flex-1 w-full">
           <ErrorBoundary>
             <Routes>
               <Route path="/" element={<Dashboard />} />
-              <Route path="/setup" element={<Setup />} />
               <Route path="/balance-test" element={<BalanceTestPage />} />
+              <Route path="/advanced-orders" element={<AdvancedOrders />} />
               <Route path="/setup/feed" element={<FeedWizard />} />
               <Route path="/setup/feed/review" element={<ReviewFeed />} />
               <Route path="/setup/feed/confirmation" element={<Confirmation />} />
-              <Route path="/activity" element={<ActivityContainer />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </ErrorBoundary>

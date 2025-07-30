@@ -29,9 +29,9 @@
     "tailwindcss-animate": "^1.0.7",
     "viem": "^2.33.1",
     "vite-plugin-node-polyfills": "^0.24.0",
-    "wagmi": "^2.16.0",
     "zod": "^3.25.76",
-    "zustand": "^5.0.6"
+    "zustand": "^5.0.6",
+    "wagmi": "^2.16.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.30.1",

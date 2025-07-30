@@ -1,10 +1,13 @@
-import { useLocation } from 'react-router-dom';
-import { useReadContract, useWriteContract, useWatchContractEvent } from 'wagmi';
-import { useEffect, useState } from 'react';
-import { formatEther, parseEther } from 'viem';
+import React, { useState, useEffect } from 'react';
+import { useAccount, useReadContract } from 'wagmi';
+import { Link, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { useActiveOrder } from '../lib/useActiveOrder';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { CONTRACT_ADDRESSES } from '@/lib/constants';
+import { PriceFeedWidget } from '@/components/ui/price-feed-widget';
+import { PortfolioAnalytics } from '@/components/ui/portfolio-analytics';
+import { formatEther, parseEther } from 'viem';
+import { useActiveOrder } from '../lib/useActiveOrder';
 
 type TwapDcaExecutedArgs = {
     orderHash: string;
@@ -13,43 +16,24 @@ type TwapDcaExecutedArgs = {
     nextFillTime: bigint;
 };
 
-// TODO: Replace with actual deployed contract address and ABI
-// This should point to your deployed TWAP DCA contract
+// Contract configuration for TWAP DCA
 const HOOK_ADDRESS = CONTRACT_ADDRESSES.TWAP_DCA;
 const HOOK_ABI = [
     {
-        type: 'function',
+        inputs: [{ name: 'orderHash', type: 'bytes32' }],
         name: 'nextFillTime',
+        outputs: [{ name: '', type: 'uint256' }],
         stateMutability: 'view',
-        inputs: [{ name: 'orderHash', type: 'bytes32' }],
-        outputs: [{ name: '', type: 'uint64' }],
-    },
-    {
-        type: 'event',
-        name: 'TwapDcaExecuted',
-        inputs: [
-            { name: 'orderHash', type: 'bytes32', indexed: true },
-            { name: 'chunkIn', type: 'uint256', indexed: false },
-            { name: 'minOut', type: 'uint256', indexed: false },
-            { name: 'nextFillTime', type: 'uint64', indexed: false },
-        ],
-        anonymous: false,
-    },
-    {
         type: 'function',
+    },
+    {
+        inputs: [{ name: 'orderHash', type: 'bytes32' }],
         name: 'intervalSecs',
+        outputs: [{ name: '', type: 'uint256' }],
         stateMutability: 'view',
-        inputs: [{ name: 'orderHash', type: 'bytes32' }],
-        outputs: [{ name: '', type: 'uint64' }],
-    },
-    {
         type: 'function',
-        name: 'cancelOrder',
-        stateMutability: 'nonpayable',
-        inputs: [{ name: 'orderHash', type: 'bytes32' }],
-        outputs: [],
     },
-];
+] as const;
 
 export default function Dashboard() {
     const location = useLocation();
@@ -57,15 +41,16 @@ export default function Dashboard() {
     const demoHash = '0xdemo0000000000000000000000000000000000000000000000000000000000000000';
     const storedOrderHash = useActiveOrder();
     const orderHash = demo ? demoHash : storedOrderHash;
+    const { address } = useAccount();
 
     return (
         <div className="max-w-7xl mx-auto p-6">
             {/* Main Content - Hippo Left, Content Right */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-12">
                 {/* Left Side - Large Hippo Section */}
-                <div className="lg:col-span-1">
+                <div className="lg:col-span-2">
                     <div className="bg-gradient-to-b from-green-50 to-white rounded-2xl p-12 h-full flex flex-col items-center justify-center">
-                        <div className="w-80 h-80 mb-8">
+                        <div className="w-96 h-96 mb-8">
                             <img
                                 src="/src/assets/happy.PNG"
                                 alt="Happy Hippo"
@@ -78,7 +63,7 @@ export default function Dashboard() {
                 </div>
 
                 {/* Right Side - Dashboard Content */}
-                <div className="lg:col-span-2 space-y-6">
+                <div className="lg:col-span-3 space-y-6">
                     {/* Vitals Bar Row */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <VitalCard
@@ -96,6 +81,21 @@ export default function Dashboard() {
                             title="Growth"
                             value={orderHash ? "Level 1 - 25% vested" : "Demo mode"}
                         />
+                    </div>
+
+                    {/* Feed Now Section */}
+                    <FeedNowSection />
+
+                    {/* Portfolio Section */}
+                    {address && (
+                        <PortfolioSection address={address} />
+                    )}
+
+                    {/* Price Feed Widget */}
+                    <div className="flex justify-start">
+                        <div className="w-1/2">
+                            <PriceFeedWidget />
+                        </div>
                     </div>
 
                     {/* Real-Time Chart + History */}
@@ -125,6 +125,352 @@ export default function Dashboard() {
                 </div>
             </div>
         </div>
+    );
+}
+
+function FeedNowSection() {
+    const [selectedOption, setSelectedOption] = useState<'regular' | 'fusion' | 'mev-protect'>('regular');
+    const [isLoading, setIsLoading] = useState(false);
+    const [isOpen, setIsOpen] = useState(false);
+
+    const swapOptions = [
+        {
+            id: 'regular',
+            title: 'Regular',
+            description: 'Instant DEX swap, classic path',
+            icon: '⚡',
+            estimatedTime: '~30 seconds',
+            estimatedGas: '~150,000 gas',
+            explanation: 'Standard swap through 1inch aggregator. Fastest execution with competitive pricing.',
+            price: '$1,850.75',
+            output: '0.054 ETH'
+        },
+        {
+            id: 'fusion',
+            title: 'Fusion',
+            description: 'Intent-based, MEV-protected, better price',
+            icon: '🛡️',
+            estimatedTime: '~2-5 minutes',
+            estimatedGas: '~80,000 gas',
+            explanation: 'MEV-protected intent-based swap. Slower but better price execution and protection.',
+            price: '$1,849.50',
+            output: '0.0541 ETH'
+        },
+        {
+            id: 'mev-protect',
+            title: 'MEV Protect',
+            description: 'Regular swap via Web3 API protection',
+            icon: '🔒',
+            estimatedTime: '~1-2 minutes',
+            estimatedGas: '~120,000 gas',
+            explanation: 'Standard swap submitted through Web3 API for MEV protection.',
+            price: '$1,850.25',
+            output: '0.054 ETH'
+        }
+    ];
+
+    const handleFeedNow = async () => {
+        setIsLoading(true);
+        // Simulate swap execution
+        setTimeout(() => {
+            setIsLoading(false);
+            alert(`${swapOptions.find(opt => opt.id === selectedOption)?.title} swap executed!`);
+        }, 2000);
+    };
+
+    return (
+        <Card className="bg-gradient-to-br from-green-50 to-emerald-50 border-green-200">
+            <CardHeader
+                className="cursor-pointer hover:bg-green-100/50 transition-colors duration-200"
+                onClick={() => setIsOpen(!isOpen)}
+            >
+                <CardTitle className="flex items-center justify-between text-green-700">
+                    <div className="flex items-center gap-3">
+                        🍽️ Feed Now
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <span className="text-sm font-normal text-green-600">
+                            {isOpen ? 'Click to collapse' : 'Click to expand'}
+                        </span>
+                        <svg
+                            className={`w-5 h-5 text-green-600 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                    </div>
+                </CardTitle>
+            </CardHeader>
+            {isOpen && (
+                <CardContent>
+                    <div className="space-y-6">
+                        {/* Swap Options */}
+                        <div>
+                            <h3 className="text-lg font-semibold text-gray-900 mb-4">Choose Swap Method</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                {swapOptions.map((option) => (
+                                    <div
+                                        key={option.id}
+                                        className={`relative border-2 rounded-xl p-4 cursor-pointer transition-all duration-200 ${selectedOption === option.id
+                                            ? 'border-emerald-500 bg-emerald-50 shadow-md'
+                                            : 'border-gray-200 bg-white hover:border-gray-300'
+                                            }`}
+                                        onClick={() => setSelectedOption(option.id as 'regular' | 'fusion' | 'mev-protect')}
+                                    >
+                                        {/* Radio Button */}
+                                        <div className="absolute top-3 right-3">
+                                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${selectedOption === option.id
+                                                ? 'border-emerald-500 bg-emerald-500'
+                                                : 'border-gray-300'
+                                                }`}>
+                                                {selectedOption === option.id && (
+                                                    <div className="w-2 h-2 bg-white rounded-full"></div>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Option Content */}
+                                        <div className="space-y-3">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-2xl">{option.icon}</span>
+                                                <div>
+                                                    <h4 className="font-semibold text-gray-900">{option.title}</h4>
+                                                    <p className="text-sm text-gray-600">{option.description}</p>
+                                                </div>
+                                            </div>
+
+                                            {/* Quote */}
+                                            <div className="bg-gray-50 rounded-lg p-3">
+                                                <div className="flex justify-between items-center mb-2">
+                                                    <span className="text-sm text-gray-600">Price:</span>
+                                                    <span className="font-semibold text-gray-900">{option.price}</span>
+                                                </div>
+                                                <div className="flex justify-between items-center">
+                                                    <span className="text-sm text-gray-600">You'll receive:</span>
+                                                    <span className="font-semibold text-emerald-600">{option.output}</span>
+                                                </div>
+                                            </div>
+
+                                            {/* Details */}
+                                            <div className="space-y-2 text-sm">
+                                                <div className="flex justify-between">
+                                                    <span className="text-gray-600">Est. Time:</span>
+                                                    <span className="font-medium">{option.estimatedTime}</span>
+                                                </div>
+                                                <div className="flex justify-between">
+                                                    <span className="text-gray-600">Est. Gas:</span>
+                                                    <span className="font-medium">{option.estimatedGas}</span>
+                                                </div>
+                                            </div>
+
+                                            {/* Explanation */}
+                                            <p className="text-xs text-gray-500 leading-relaxed">
+                                                {option.explanation}
+                                            </p>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-gray-200">
+                            <Button
+                                onClick={handleFeedNow}
+                                disabled={isLoading}
+                                className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-3"
+                            >
+                                {isLoading ? (
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                        Feeding...
+                                    </div>
+                                ) : (
+                                    <div className="flex items-center gap-2">
+                                        🍽️ Feed Now
+                                    </div>
+                                )}
+                            </Button>
+                            <Button
+                                variant="outline"
+                                className="border-emerald-200 text-emerald-600 hover:bg-emerald-50"
+                                asChild
+                            >
+                                <Link to="/setup/feed">
+                                    🔄 Recurring Feed
+                                </Link>
+                            </Button>
+                        </div>
+                    </div>
+                </CardContent>
+            )}
+        </Card>
+    );
+}
+
+function PortfolioSection({ address }: { address: string }) {
+    const [selectedToken, setSelectedToken] = useState<string | null>(null);
+    const [isFeedModalOpen, setIsFeedModalOpen] = useState(false);
+
+    // Mock token balances data
+    const tokenBalances = [
+        {
+            symbol: 'ETH',
+            name: 'Ethereum',
+            balance: '2.45',
+            usdValue: 4532.50,
+            logo: '🔵',
+            address: '0x0000000000000000000000000000000000000000'
+        },
+        {
+            symbol: 'USDC',
+            name: 'USD Coin',
+            balance: '1250.00',
+            usdValue: 1250.00,
+            logo: '🔵',
+            address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
+        },
+        {
+            symbol: 'DAI',
+            name: 'Dai',
+            balance: '500.00',
+            usdValue: 500.00,
+            logo: '🟡',
+            address: '0x6B175474E89094C44Da98b954EedeAC495271d0F'
+        },
+        {
+            symbol: 'USDT',
+            name: 'Tether',
+            balance: '750.00',
+            usdValue: 750.00,
+            logo: '🟢',
+            address: '0xdAC17F958D2ee523a2206206994597C13D831ec7'
+        },
+        {
+            symbol: 'WBTC',
+            name: 'Wrapped Bitcoin',
+            balance: '0.15',
+            usdValue: 6750.00,
+            logo: '🟠',
+            address: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599'
+        },
+        {
+            symbol: 'UNI',
+            name: 'Uniswap',
+            balance: '25.50',
+            usdValue: 1275.00,
+            logo: '🟣',
+            address: '0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984'
+        }
+    ];
+
+    const totalValue = tokenBalances.reduce((sum, token) => sum + token.usdValue, 0);
+
+    const handleFeedPet = (token: typeof tokenBalances[0]) => {
+        setSelectedToken(token.symbol);
+        setIsFeedModalOpen(true);
+    };
+
+    return (
+        <>
+            <Card className="bg-white border-green-200 shadow-sm">
+                <CardHeader>
+                    <CardTitle className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <span className="text-2xl">💰</span>
+                            <span>Portfolio</span>
+                        </div>
+                        <div className="text-right">
+                            <div className="text-sm text-gray-500">Total Value</div>
+                            <div className="text-2xl font-bold text-green-600">
+                                ${totalValue.toLocaleString()}
+                            </div>
+                        </div>
+                    </CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <div className="overflow-x-auto">
+                        <div className="flex gap-4 min-w-max">
+                            {tokenBalances.map((token) => (
+                                <div key={token.symbol} className="bg-gray-50 rounded-lg p-4 border border-gray-200 w-64 flex-shrink-0">
+                                    <div className="flex items-center justify-between mb-3">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center text-white font-bold text-sm">
+                                                {token.logo}
+                                            </div>
+                                            <div>
+                                                <div className="font-semibold text-gray-900">{token.symbol}</div>
+                                                <div className="text-xs text-gray-500">{token.name}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2 mb-4">
+                                        <div className="flex justify-between text-sm">
+                                            <span className="text-gray-600">Balance:</span>
+                                            <span className="font-medium">{token.balance}</span>
+                                        </div>
+                                        <div className="flex justify-between text-sm">
+                                            <span className="text-gray-600">Value:</span>
+                                            <span className="font-semibold text-green-600">
+                                                ${token.usdValue.toLocaleString()}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <Button
+                                        onClick={() => handleFeedPet(token)}
+                                        className="w-full bg-emerald-500 hover:bg-emerald-600 text-white text-sm py-2"
+                                    >
+                                        🍽️ Feed {token.symbol}
+                                    </Button>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+
+            {/* Feed Pet Modal */}
+            {selectedToken && (
+                <div className={`fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center ${isFeedModalOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'} transition-opacity duration-200`}>
+                    <div className="bg-white rounded-2xl p-6 max-w-md w-full mx-4">
+                        <div className="text-center mb-6">
+                            <div className="text-4xl mb-2">🍽️</div>
+                            <h3 className="text-xl font-bold text-gray-900">Feed Pet with {selectedToken}</h3>
+                            <p className="text-gray-600">Choose how to swap your {selectedToken} for pet food</p>
+                        </div>
+
+                        <div className="space-y-3 mb-6">
+                            <Button className="w-full bg-emerald-500 hover:bg-emerald-600 text-white">
+                                ⚡ Regular Swap
+                            </Button>
+                            <Button variant="outline" className="w-full border-emerald-200 text-emerald-600 hover:bg-emerald-50">
+                                🛡️ Fusion (MEV Protected)
+                            </Button>
+                            <Button variant="outline" className="w-full border-emerald-200 text-emerald-600 hover:bg-emerald-50">
+                                🔒 MEV Protect
+                            </Button>
+                        </div>
+
+                        <div className="flex gap-3">
+                            <Button
+                                variant="outline"
+                                className="flex-1"
+                                onClick={() => setIsFeedModalOpen(false)}
+                            >
+                                Cancel
+                            </Button>
+                            <Button className="flex-1 bg-emerald-500 hover:bg-emerald-600">
+                                Feed Pet
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </>
     );
 }
 
@@ -183,298 +529,35 @@ function Countdown({ orderHash, disabled }: { orderHash: string; disabled?: bool
 }
 
 function PetHappinessBar({ orderHash, disabled }: { orderHash: string; disabled?: boolean }) {
-    const { data: intervalSecs } = useReadContract({
-        address: HOOK_ADDRESS,
-        abi: HOOK_ABI,
-        functionName: 'intervalSecs',
-        args: [orderHash],
-        query: { enabled: !!orderHash && !disabled },
-    });
-    const { data: nextFill } = useReadContract({
-        address: HOOK_ADDRESS,
-        abi: HOOK_ABI,
-        functionName: 'nextFillTime',
-        args: [orderHash],
-        query: { enabled: !!orderHash && !disabled },
-    });
-    const [percentage, setPercentage] = useState(100);
-    const [pulse, setPulse] = useState(false);
-
-    useEffect(() => {
-        if (!nextFill || !intervalSecs || disabled) return;
-        const update = () => {
-            const now = Math.floor(Date.now() / 1000);
-            const left = Number(nextFill) - now;
-            const pct = Math.max(0, Math.min(100, (left / Number(intervalSecs)) * 100));
-            setPercentage(pct);
-        };
-        update();
-        const interval = setInterval(update, 1000);
-        return () => clearInterval(interval);
-    }, [nextFill, intervalSecs, disabled]);
-
-    useWatchContractEvent({
-        address: HOOK_ADDRESS,
-        abi: HOOK_ABI,
-        eventName: 'TwapDcaExecuted',
-        onLogs(logs) {
-            if (disabled) return;
-            for (const log of logs) {
-                const l = log as unknown as { args: TwapDcaExecutedArgs; transactionHash: string };
-                if (l.args && l.args.orderHash === orderHash) {
-                    setPercentage(100);
-                    setPulse(true);
-                    setTimeout(() => setPulse(false), 400);
-                }
-            }
-        },
-    });
-
     if (disabled) {
         return <span className="text-gray-500">Demo mode</span>;
     }
-
     return (
         <div className="space-y-2">
-            <div className="h-2 rounded bg-gray-200 overflow-hidden relative transition-all duration-500"
-                style={{ boxShadow: pulse ? '0 0 8px 2px #34d399' : undefined }}>
-                <div
-                    className="h-full bg-emerald-400 transition-all duration-1000"
-                    style={{ width: `${percentage}%` }}
-                />
+            <div className="h-2 rounded bg-gray-200 overflow-hidden">
+                <div className="h-full bg-emerald-400 w-3/4"></div>
             </div>
-            <span className="text-xs text-gray-600">HF {percentage.toFixed(1)}% – Doctor Armed</span>
+            <span className="text-xs text-gray-600">HF 75% – Doctor Armed</span>
         </div>
     );
 }
 
 function FeedHistoryChart({ orderHash, disabled }: { orderHash: string; disabled?: boolean }) {
-    const [history, setHistory] = useState<{ idx: number; amountIn: bigint; amountOut: bigint; nextFillTime: bigint; txHash: string }[]>([]);
-
-    useWatchContractEvent({
-        address: HOOK_ADDRESS,
-        abi: HOOK_ABI,
-        eventName: 'TwapDcaExecuted',
-        onLogs(logs) {
-            if (disabled) return;
-            for (const log of logs) {
-                const l = log as unknown as { args: TwapDcaExecutedArgs; transactionHash: string };
-                if (l.args && l.args.orderHash === orderHash) {
-                    setHistory(prev => [
-                        {
-                            idx: prev.length + 1,
-                            amountIn: l.args.chunkIn,
-                            amountOut: l.args.minOut,
-                            nextFillTime: l.args.nextFillTime,
-                            txHash: l.transactionHash,
-                        },
-                        ...prev.slice(0, 19),
-                    ]);
-                }
-            }
-        },
-    });
-
-    // Demo data for disabled state
-    const demoData = [
-        { idx: 1, amountIn: parseEther('0.1'), amountOut: parseEther('0.095'), timestamp: Date.now() - 86400000 },
-        { idx: 2, amountIn: parseEther('0.1'), amountOut: parseEther('0.092'), timestamp: Date.now() - 43200000 },
-        { idx: 3, amountIn: parseEther('0.1'), amountOut: parseEther('0.089'), timestamp: Date.now() - 21600000 },
-    ];
-
-    const chartData = disabled ? demoData : history.map(h => ({
-        idx: h.idx,
-        amountIn: h.amountIn,
-        amountOut: h.amountOut,
-        timestamp: Number(h.nextFillTime) * 1000
-    }));
-
-    if (chartData.length === 0) {
+    if (disabled) {
         return (
             <div className="h-80 bg-gray-50 rounded-lg flex items-center justify-center text-gray-500 text-lg">
-                No feed history yet
+                Demo mode - Start a DCA to see real feed history
             </div>
         );
     }
-
-    // Chart dimensions
-    const width = 600;
-    const height = 300;
-    const padding = 40;
-    const chartWidth = width - 2 * padding;
-    const chartHeight = height - 2 * padding;
-
-    // Calculate scales
-    const maxAmount = Math.max(...chartData.map(d => Number(formatEther(d.amountOut))));
-    const minAmount = Math.min(...chartData.map(d => Number(formatEther(d.amountOut))));
-    const amountRange = maxAmount - minAmount;
-
-    const timeRange = Math.max(...chartData.map(d => d.timestamp)) - Math.min(...chartData.map(d => d.timestamp));
-    const now = Date.now();
-    const startTime = timeRange > 0 ? Math.min(...chartData.map(d => d.timestamp)) : now - 86400000;
-
-    // Generate points for the line
-    const points = chartData.map((d) => {
-        const x = padding + (d.timestamp - startTime) / timeRange * chartWidth;
-        const y = height - padding - (Number(formatEther(d.amountOut)) - minAmount) / amountRange * chartHeight;
-        return `${x},${y}`;
-    }).join(' ');
-
-    // Generate bars
-    const barWidth = chartWidth / chartData.length * 0.8;
-
     return (
-        <div className="h-80">
-            <svg width={width} height={height} className="w-full h-full">
-                {/* Background grid */}
-                <defs>
-                    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-                        <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#f3f4f6" strokeWidth="1" />
-                    </pattern>
-                </defs>
-                <rect width="100%" height="100%" fill="url(#grid)" />
-
-                {/* Chart area */}
-                <rect
-                    x={padding}
-                    y={padding}
-                    width={chartWidth}
-                    height={chartHeight}
-                    fill="none"
-                    stroke="#e5e7eb"
-                    strokeWidth="1"
-                />
-
-                {/* Y-axis labels */}
-                {[0, 0.25, 0.5, 0.75, 1].map((tick, _i) => {
-                    const value = minAmount + tick * amountRange;
-                    const y = height - padding - tick * chartHeight;
-                    return (
-                        <g key={_i}>
-                            <line
-                                x1={padding - 5}
-                                y1={y}
-                                x2={padding}
-                                y2={y}
-                                stroke="#9ca3af"
-                                strokeWidth="1"
-                            />
-                            <text
-                                x={padding - 10}
-                                y={y + 4}
-                                textAnchor="end"
-                                fontSize="12"
-                                fill="#6b7280"
-                            >
-                                {value.toFixed(4)}
-                            </text>
-                        </g>
-                    );
-                })}
-
-                {/* X-axis labels */}
-                {chartData.map((d, i) => {
-                    const x = padding + (d.timestamp - startTime) / timeRange * chartWidth;
-                    const time = new Date(d.timestamp);
-                    return (
-                        <g key={i}>
-                            <line
-                                x1={x}
-                                y1={height - padding}
-                                x2={x}
-                                y2={height - padding + 5}
-                                stroke="#9ca3af"
-                                strokeWidth="1"
-                            />
-                            <text
-                                x={x}
-                                y={height - padding + 20}
-                                textAnchor="middle"
-                                fontSize="10"
-                                fill="#6b7280"
-                                transform={`rotate(-45 ${x} ${height - padding + 20})`}
-                            >
-                                {time.toLocaleTimeString()}
-                            </text>
-                        </g>
-                    );
-                })}
-
-                {/* Line chart */}
-                <polyline
-                    fill="none"
-                    stroke="#34d399"
-                    strokeWidth="3"
-                    points={points}
-                />
-
-                {/* Data points */}
-                {chartData.map((d, i) => {
-                    const x = padding + (d.timestamp - startTime) / timeRange * chartWidth;
-                    const y = height - padding - (Number(formatEther(d.amountOut)) - minAmount) / amountRange * chartHeight;
-                    return (
-                        <circle
-                            key={i}
-                            cx={x}
-                            cy={y}
-                            r="4"
-                            fill="#34d399"
-                            stroke="white"
-                            strokeWidth="2"
-                        />
-                    );
-                })}
-
-                {/* Bar chart overlay */}
-                {chartData.map((d, i) => {
-                    const x = padding + (d.timestamp - startTime) / timeRange * chartWidth - barWidth / 2;
-                    const barHeight = (Number(formatEther(d.amountOut)) - minAmount) / amountRange * chartHeight;
-                    const y = height - padding - barHeight;
-                    return (
-                        <rect
-                            key={i}
-                            x={x}
-                            y={y}
-                            width={barWidth}
-                            height={barHeight}
-                            fill="#34d399"
-                            fillOpacity="0.2"
-                            stroke="#34d399"
-                            strokeWidth="1"
-                        />
-                    );
-                })}
-            </svg>
+        <div className="h-80 bg-gray-50 rounded-lg flex items-center justify-center text-gray-500 text-lg">
+            No feed history yet
         </div>
     );
 }
 
 function HistoryList({ orderHash, disabled }: { orderHash: string; disabled?: boolean }) {
-    const [history, setHistory] = useState<{ idx: number; amountIn: bigint; amountOut: bigint; nextFillTime: bigint; txHash: string }[]>([]);
-    useWatchContractEvent({
-        address: HOOK_ADDRESS,
-        abi: HOOK_ABI,
-        eventName: 'TwapDcaExecuted',
-        onLogs(logs) {
-            if (disabled) return;
-            for (const log of logs) {
-                const l = log as unknown as { args: TwapDcaExecutedArgs; transactionHash: string };
-                if (l.args && l.args.orderHash === orderHash) {
-                    setHistory(prev => [
-                        {
-                            idx: prev.length + 1,
-                            amountIn: l.args.chunkIn,
-                            amountOut: l.args.minOut,
-                            nextFillTime: l.args.nextFillTime,
-                            txHash: l.transactionHash,
-                        },
-                        ...prev.slice(0, 19),
-                    ]);
-                }
-            }
-        },
-    });
-
     if (disabled) {
         return (
             <div className="space-y-2">
@@ -484,56 +567,20 @@ function HistoryList({ orderHash, disabled }: { orderHash: string; disabled?: bo
                     <span>In: 0.1 ETH Out: 0.095 USDC</span>
                     <span className="text-emerald-500">demo</span>
                 </div>
-                <div className="flex items-center gap-2 text-xs text-gray-400">
-                    <span className="font-mono">#2</span>
-                    <span>In: 0.1 ETH Out: 0.092 USDC</span>
-                    <span className="text-emerald-500">demo</span>
-                </div>
             </div>
         );
     }
-
-    if (history.length === 0) {
-        return <div className="text-gray-500 text-sm">No fills yet.</div>;
-    }
-
-    return (
-        <div className="space-y-2">
-            {history.map((h, i) => (
-                <div key={i} className="flex items-center gap-2 text-xs">
-                    <span className="font-mono text-green-600">#{h.idx}</span>
-                    <span className="text-gray-700">In: {formatEther(h.amountIn)} Out: {formatEther(h.amountOut)}</span>
-                    <a href={`https://etherscan.io/tx/${h.txHash}`} target="_blank" rel="noopener noreferrer" className="text-emerald-500 underline">tx</a>
-                </div>
-            ))}
-        </div>
-    );
+    return <div className="text-gray-500 text-sm">No fills yet.</div>;
 }
 
 function CancelButton({ orderHash, onCancel, disabled }: { orderHash: string; onCancel: () => void; disabled?: boolean }) {
-    const { writeContractAsync, isPending } = useWriteContract();
-    const [done, setDone] = useState(false);
-    const handleCancel = async () => {
-        try {
-            await writeContractAsync({
-                address: HOOK_ADDRESS,
-                abi: HOOK_ABI,
-                functionName: 'cancelOrder',
-                args: [orderHash],
-            });
-            setDone(true);
-            onCancel();
-        } catch {
-            // Optionally show error
-        }
-    };
     return (
         <Button
-            onClick={handleCancel}
-            disabled={disabled || isPending || done}
+            onClick={onCancel}
+            disabled={disabled}
             className="bg-red-200 hover:bg-red-300 text-red-700 border-red-300 shadow-sm hover:shadow-md transition-all"
         >
-            {done ? 'Order Cancelled' : isPending ? 'Cancelling…' : 'Cancel Order'}
+            Cancel Order
         </Button>
     );
-} 
+}
