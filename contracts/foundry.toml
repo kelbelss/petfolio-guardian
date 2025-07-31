@@ -5,8 +5,6 @@ libs = ["lib"]
 optimizer = true
 via_ir = true
 
-[rpc_endpoints]
-# default is your local fork
-default = "http://127.0.0.1:8545"
-# mainnet 
-mainnet = "${MAINNET_RPC_URL}"
+
+[etherscan]
+8453 = { key = "${ETHERSCAN_API_KEY}", url = "https://api.basescan.org/api" }
