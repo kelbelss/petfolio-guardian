@@ -6,8 +6,10 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import FeedWizard from './pages/dca/setup';
 import ReviewFeed from './pages/dca/review';
 import Confirmation from './pages/dca/confirmation';
+import MyFeeds from './pages/dca/feeds';
 import Dashboard from './pages/dashboard';
 import AdvancedOrders from './pages/advanced-orders';
+import HowItWorks from './pages/how-it-works';
 
 
 
@@ -31,8 +33,16 @@ export default function App() {
                 Analytics
               </Button>
             </Link>
-
-
+            <Link to="/dca/feeds">
+              <Button variant="outline" className="text-gray-700">
+                My Feeds
+              </Button>
+            </Link>
+            <Link to="/how-it-works">
+              <Button variant="outline" className="text-gray-700">
+                How It Works
+              </Button>
+            </Link>
 
             <Link to="/setup/feed">
               <Button className="bg-emerald-400 hover:bg-emerald-500 text-white shadow-sm hover:shadow-md transition-all">
@@ -54,6 +64,8 @@ export default function App() {
               <Route path="/setup/feed" element={<FeedWizard />} />
               <Route path="/setup/feed/review" element={<ReviewFeed />} />
               <Route path="/setup/feed/confirmation" element={<Confirmation />} />
+              <Route path="/dca/feeds" element={<MyFeeds />} />
+              <Route path="/how-it-works" element={<HowItWorks />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </ErrorBoundary>
