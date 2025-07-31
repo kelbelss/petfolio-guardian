@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.29;
 
-// Imports
+// --- Imports ---
 import {IInteractionNotificationReceiver} from "./interfaces/IInteractionNotificationReceiver.sol";
 import {IAggregationRouterV6} from "./interfaces/IAggregationRouterV6.sol";
 import {IERC20} from "../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
@@ -35,7 +35,6 @@ contract TwapDcaHook is IInteractionNotificationReceiver {
     mapping(bytes32 => uint64) public nextFillTime;
 
     /// @dev Immutable params packed into `order.interaction`
-    // I want to abi decode the data from interactions that LOP sends hook to verify it
     struct TwapParams {
         bytes rawOrder; // abi.encode(LimitOrder) blob
         bytes32 orderHash; // maker’s EIP-712 hash (must match rawOrder)
@@ -81,7 +80,7 @@ contract TwapDcaHook is IInteractionNotificationReceiver {
 
         // execute router swap & token transfers
 
-        // 1) Pull srcToken from user (Permit2)
+        // 1) pull srcToken from user (Permit2)
         IPermit2(params.permit2).permitTransferFrom(params.permit2Data);
         IAllowanceTransfer(params.permit2).transferFrom(params.srcToken, params.user, address(this), params.chunkIn);
 
@@ -122,9 +121,6 @@ contract TwapDcaHook is IInteractionNotificationReceiver {
         // 7) emit event
         emit TwapDcaExecuted(verifiedHash, params.chunkIn, params.minOut, newNextFillTime);
     }
-
-    /// @notice Post‑interaction hook (unused in v1 at this stage)
-    function postInteraction(bytes calldata /*data*/ ) external onlyLOP {}
 
     function _verifyOrderHash(bytes memory rawOrder, bytes32 claimed) internal pure returns (bytes32 verifiedHash) {
         verifiedHash = keccak256(rawOrder);
