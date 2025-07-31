@@ -9,18 +9,14 @@ import {
     BarChart3,
     Activity,
     Coins,
-    Search,
     ArrowUpRight,
-    ArrowDownRight,
     Eye,
-    Clock,
     Users
 } from 'lucide-react';
 import { useTokenPrice, useSingleTokenMetadata, useTokenMetadata } from '@/lib/hooks/usePriceFeeds';
-import { fetchAllBalances } from '@/lib/oneInchTokenApi';
 import { apiFetch } from '@/lib/oneInchProxy';
 import { useAccount } from 'wagmi';
-import { COMMON_TOKENS } from '@/lib/constants';
+import { COMMON_TOKENS } from '@/config/base';
 
 interface OrderbookEntry {
     price: string;
@@ -53,7 +49,7 @@ interface TokenInfo {
     volume: string;
 }
 
-export default function AdvancedOrders() {
+export default function MarketAnalysis() {
     const { address } = useAccount();
     const [activeSection, setActiveSection] = useState('market');
     const [selectedToken, setSelectedToken] = useState('ETH');
@@ -62,7 +58,15 @@ export default function AdvancedOrders() {
     const [orderbookData, setOrderbookData] = useState<OrderbookData | null>(null);
     const [isOrderbookLoading, setIsOrderbookLoading] = useState(false);
     const [orderbookError, setOrderbookError] = useState<string | null>(null);
-    const [marketData, setMarketData] = useState<any>(null);
+    const [marketData, setMarketData] = useState<{
+        totalMarketCap?: string;
+        totalVolume24h?: string;
+        btcDominance?: string;
+        ethDominance?: string;
+        fearGreedIndex?: number;
+        topGainers?: Array<{ symbol: string; change: string; price: string }>;
+        topLosers?: Array<{ symbol: string; change: string; price: string }>;
+    } | null>(null);
     const [depth, setDepth] = useState('10');
 
     // Token data for orderbook
@@ -91,8 +95,7 @@ export default function AdvancedOrders() {
     ]);
 
     // Real API hooks
-    const { data: allTokenMetadata } = useTokenMetadata(1);
-    const { data: balances } = useAccount();
+    const { data: allTokenMetadata } = useTokenMetadata(8453);
 
     // Get token address based on selected token
     const getTokenAddress = (symbol: string) => {
@@ -162,8 +165,8 @@ export default function AdvancedOrders() {
 
                 // Test different market data endpoints since orderbook endpoints don't exist
                 const endpoints = [
-                    `/swap/v6.0/1/quote?src=${baseToken.address}&dst=${quoteToken.address}&amount=1000000000000000000`,
-                    `/swap/v6.0/1/quote?src=${quoteToken.address}&dst=${baseToken.address}&amount=1000000000000000000`,
+                    `/swap/v6.0/8453/quote?src=${baseToken.address}&dst=${quoteToken.address}&amount=1000000000000000000`,
+                    `/swap/v6.0/8453/quote?src=${quoteToken.address}&dst=${baseToken.address}&amount=1000000000000000000`,
                 ];
 
                 let marketData = null;
@@ -175,8 +178,8 @@ export default function AdvancedOrders() {
                         const response = await apiFetch(endpoint);
                         console.log(`Response from ${endpoint}:`, response);
 
-                        if (response && response.dstAmount) {
-                            marketData = response;
+                        if (response && typeof response === 'object' && 'dstAmount' in response) {
+                            marketData = response as { dstAmount: string };
                             workingEndpoint = endpoint;
                             break;
                         }
@@ -224,8 +227,8 @@ export default function AdvancedOrders() {
 
             // Test different market data endpoints since orderbook endpoints don't exist
             const endpoints = [
-                `/swap/v6.0/1/quote?src=${baseToken}&dst=${quoteToken}&amount=1000000000000000000`,
-                `/swap/v6.0/1/quote?src=${quoteToken}&dst=${baseToken}&amount=1000000000000000000`,
+                `/swap/v6.0/8453/quote?src=${baseToken}&dst=${quoteToken}&amount=1000000000000000000`,
+                `/swap/v6.0/8453/quote?src=${quoteToken}&dst=${baseToken}&amount=1000000000000000000`,
             ];
 
             let marketData = null;
@@ -237,8 +240,8 @@ export default function AdvancedOrders() {
                     const response = await apiFetch(endpoint);
                     console.log(`Response from ${endpoint}:`, response);
 
-                    if (response && response.dstAmount) {
-                        marketData = response;
+                    if (response && typeof response === 'object' && 'dstAmount' in response) {
+                        marketData = response as { dstAmount: string };
                         workingEndpoint = endpoint;
                         break;
                     }
@@ -507,7 +510,7 @@ export default function AdvancedOrders() {
                             </CardHeader>
                             <CardContent>
                                 <div className="space-y-4">
-                                    {marketData?.topGainers?.map((token: any, index: number) => (
+                                    {marketData?.topGainers?.map((token, index: number) => (
                                         <div key={index} className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
                                             <div className="flex items-center space-x-3">
                                                 <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
@@ -540,7 +543,7 @@ export default function AdvancedOrders() {
                             </CardHeader>
                             <CardContent>
                                 <div className="space-y-4">
-                                    {marketData?.topLosers?.map((token: any, index: number) => (
+                                    {marketData?.topLosers?.map((token, index: number) => (
                                         <div key={index} className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
                                             <div className="flex items-center space-x-3">
                                                 <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">

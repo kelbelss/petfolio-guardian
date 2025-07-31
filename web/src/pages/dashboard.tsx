@@ -1,15 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { useAccount, useReadContract } from 'wagmi';
-import { Link, useLocation } from 'react-router-dom';
+import { useAccount, useReadContract, useChainId } from 'wagmi';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
 import { CONTRACT_ADDRESSES } from '@/lib/constants';
 import { PriceFeedWidget } from '@/components/ui/price-feed-widget';
-import { formatEther } from 'viem';
+
 import { useActiveOrder } from '../lib/useActiveOrder';
 import { fetchAllBalances, fetchTokenMetadata } from '@/lib/oneInchTokenApi';
 import type { TokenMetadataResponse } from '@/lib/oneInchTokenApi';
+import { getStoredDcaOrders, formatTimeUntilNextFill } from '@/lib/dcaCancel';
+import { useTokens } from '@/lib/hooks/useTokens';
+import { useTokenPrice } from '@/lib/hooks/usePriceFeeds';
+import { FALLBACK_TOKENS } from '@/lib/constants';
+import type { TokenMeta } from '@/lib/oneInchTokenApi';
+import { FeedNowSection } from '@/components/FeedNowSection';
 
 
 
@@ -34,11 +40,39 @@ const HOOK_ABI = [
 
 export default function Dashboard() {
     const location = useLocation();
+    const navigate = useNavigate();
     const demo = new URLSearchParams(location.search).get('demo') === '1';
     const demoHash = '0xdemo0000000000000000000000000000000000000000000000000000000000000000';
     const storedOrderHash = useActiveOrder();
     const orderHash = demo ? demoHash : storedOrderHash;
     const { address } = useAccount();
+    const chainId = useChainId();
+    const [activeFeeds, setActiveFeeds] = useState<Array<{
+        orderHash: string;
+        srcToken: string;
+        dstToken: string;
+        nextFillTime?: number;
+        status: string;
+    }>>([]);
+
+    // Get token data for display
+    const { data: apiTokens } = useTokens();
+    const allTokens = [...(apiTokens && apiTokens.length > 0 ? (apiTokens as TokenMeta[]) : FALLBACK_TOKENS)];
+
+    useEffect(() => {
+        loadActiveFeeds();
+    }, []);
+
+    const loadActiveFeeds = () => {
+        const feeds = getStoredDcaOrders();
+        const active = feeds.filter(feed => feed.status === 'active');
+        setActiveFeeds(active.slice(0, 3)); // Show only first 3
+    };
+
+    const getTokenSymbol = (address: string): string => {
+        const token = allTokens.find(t => t.address === address);
+        return token?.symbol || 'Unknown';
+    };
 
     return (
         <div className="max-w-screen-2xl mx-auto py-12">
@@ -80,11 +114,62 @@ export default function Dashboard() {
                     </div>
 
                     {/* Feed Now Section */}
-                    <FeedNowSection />
+                    <FeedNowSection navigate={navigate} />
+
+                    {/* Active DCA Feeds Widget */}
+                    <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200">
+                        <CardHeader>
+                            <CardTitle className="flex items-center justify-between text-blue-700">
+                                <div className="flex items-center gap-3">
+                                    📊 Your Active DCA Feeds
+                                </div>
+                                <Link
+                                    to="/dca/feeds"
+                                    className="text-sm font-normal text-blue-600 hover:text-blue-800 underline"
+                                >
+                                    View all feeds & history
+                                </Link>
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            {activeFeeds.length === 0 ? (
+                                <div className="text-center py-6">
+                                    <p className="text-gray-500 mb-4">No active feeds</p>
+                                    <Link
+                                        to="/setup/feed"
+                                        className="inline-block bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm"
+                                    >
+                                        Create one now
+                                    </Link>
+                                </div>
+                            ) : (
+                                <div className="space-y-3">
+                                    {activeFeeds.map((feed) => (
+                                        <div key={feed.orderHash} className="flex items-center justify-between p-3 bg-white rounded-lg border border-blue-100">
+                                            <div className="flex-1">
+                                                <div className="font-medium text-gray-900">
+                                                    {getTokenSymbol(feed.srcToken)} → {getTokenSymbol(feed.dstToken)}
+                                                </div>
+                                                <div className="text-sm text-gray-600">
+                                                    Next fill: {formatTimeUntilNextFill(feed.nextFillTime || 0)}
+                                                </div>
+                                            </div>
+                                            <Link
+                                                to="/dca/feeds"
+                                                className="text-blue-600 hover:text-blue-800 text-sm"
+                                            >
+                                                ⏹ Cancel
+                                            </Link>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
 
                     {/* Portfolio Section */}
                     {address && (
-                        <PortfolioSection address={address} />
+                        <PortfolioSection address={address} chainId={chainId} navigate={navigate} />
                     )}
 
                     {/* Price Feed Widget - Full Width */}
@@ -95,14 +180,20 @@ export default function Dashboard() {
                     {/* Real-Time Chart + History */}
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                         <div className="lg:col-span-2">
-                            <div className="bg-white border border-green-200 rounded-xl p-8 shadow-sm hover:shadow-lg transition-shadow">
-                                <h2 className="text-2xl font-semibold text-green-600 mb-6">Feed History</h2>
-                                <FeedHistoryChart orderHash={orderHash || demoHash} disabled={!orderHash} />
+                            <div className="bg-white border border-green-200 rounded-xl p-8 shadow-sm hover:shadow-lg transition-shadow h-80">
+                                <h2 className="text-2xl font-semibold text-green-600 mb-6 flex items-center space-x-2">
+                                    <span>Feed History</span>
+                                    <Badge className="bg-amber-50 text-amber-700 text-xs">Demo</Badge>
+                                </h2>
+                                <FeedHistoryChart orderHash={orderHash || demoHash} disabled={demo || !storedOrderHash} />
                             </div>
                         </div>
                         <div className="lg:col-span-1">
                             <div className="bg-white border border-green-200 rounded-xl p-8 shadow-sm hover:shadow-lg transition-shadow h-80 overflow-hidden">
-                                <h2 className="text-2xl font-semibold text-green-600 mb-6">History (last 20 fills)</h2>
+                                <h2 className="text-2xl font-semibold text-green-600 mb-6 flex items-center space-x-2">
+                                    <span>Feed Schedule</span>
+                                    <Badge className="bg-amber-50 text-amber-700 text-xs">Demo</Badge>
+                                </h2>
                                 <div className="overflow-y-auto h-full">
                                     <HistoryList orderHash={orderHash || demoHash} disabled={!orderHash} />
                                 </div>
@@ -122,381 +213,62 @@ export default function Dashboard() {
     );
 }
 
-function FeedNowSection() {
-    const [selectedOption, setSelectedOption] = useState<'regular' | 'fusion' | 'mev-protect'>('regular');
-    const [isLoading, setIsLoading] = useState(false);
-    const [isOpen, setIsOpen] = useState(false);
-
-    // Token selection state
-    const [fromToken, setFromToken] = useState('USDC');
-    const [toToken, setToToken] = useState('ETH');
-    const [amount, setAmount] = useState('');
-    const [quote, setQuote] = useState<{ price: string; output: string } | null>(null);
-    const [isQuoteLoading, setIsQuoteLoading] = useState(false);
-
-    // Common tokens for selection
-    const commonTokens = [
-        { symbol: 'ETH', name: 'Ethereum', address: '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee' },
-        { symbol: 'USDC', name: 'USD Coin', address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48' },
-        { symbol: 'DAI', name: 'Dai', address: '0x6B175474E89094C44Da98b954EedeAC495271d0F' },
-        { symbol: 'USDT', name: 'Tether', address: '0xdAC17F958D2ee523a2206206994597C13D831ec7' },
-        { symbol: 'WBTC', name: 'Wrapped Bitcoin', address: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599' },
-        { symbol: 'UNI', name: 'Uniswap', address: '0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984' },
-    ];
-
-    const swapOptions = [
-        {
-            id: 'regular',
-            title: 'Regular',
-            description: 'Instant DEX swap, classic path',
-            icon: '⚡',
-            estimatedTime: '~30 seconds',
-            estimatedGas: '~150,000 gas',
-            explanation: 'Standard swap through 1inch aggregator. Fastest execution with competitive pricing.'
-        },
-        {
-            id: 'fusion',
-            title: 'Fusion',
-            description: 'Intent-based, MEV-protected, better price',
-            icon: '🛡️',
-            estimatedTime: '~2-5 minutes',
-            estimatedGas: '~80,000 gas',
-            explanation: 'MEV-protected intent-based swap. Slower but better price execution and protection.'
-        },
-        {
-            id: 'mev-protect',
-            title: 'MEV Protect',
-            description: 'Regular swap via Web3 API protection',
-            icon: '🔒',
-            estimatedTime: '~1-2 minutes',
-            estimatedGas: '~120,000 gas',
-            explanation: 'Standard swap submitted through Web3 API for MEV protection.'
-        }
-    ];
-
-    const handleFeedNow = async () => {
-        setIsLoading(true);
-        // Simulate swap execution
-        setTimeout(() => {
-            setIsLoading(false);
-            alert(`${swapOptions.find(opt => opt.id === selectedOption)?.title} swap executed!`);
-        }, 2000);
-    };
-
-    return (
-        <Card className="bg-gradient-to-br from-green-50 to-emerald-50 border-green-200">
-            <CardHeader
-                className="cursor-pointer hover:bg-green-100/50 transition-colors duration-200"
-                onClick={() => setIsOpen(!isOpen)}
-            >
-                <CardTitle className="flex items-center justify-between text-green-700">
-                    <div className="flex items-center gap-3">
-                        🍽️ Feed Now
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <span className="text-sm font-normal text-green-600">
-                            {isOpen ? 'Click to collapse' : 'Click to expand'}
-                        </span>
-                        <svg
-                            className={`w-5 h-5 text-green-600 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                        >
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                        </svg>
-                    </div>
-                </CardTitle>
-            </CardHeader>
-            {isOpen && (
-                <CardContent>
-                    <div className="space-y-6">
-                        {/* Token Selection */}
-                        <div>
-                            <h3 className="text-lg font-semibold text-gray-900 mb-4">Select Tokens</h3>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                {/* From Token */}
-                                <div className="space-y-3">
-                                    <label className="text-sm font-medium text-gray-700">From Token</label>
-                                    <div className="relative">
-                                        <select
-                                            value={fromToken}
-                                            onChange={(e) => setFromToken(e.target.value)}
-                                            className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                                        >
-                                            {commonTokens.map((token) => (
-                                                <option key={token.symbol} value={token.symbol}>
-                                                    {token.symbol} - {token.name}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <Input
-                                            type="number"
-                                            placeholder="Amount"
-                                            value={amount}
-                                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAmount(e.target.value)}
-                                            className="flex-1"
-                                        />
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => setAmount('100')}
-                                            className="px-3"
-                                        >
-                                            Max
-                                        </Button>
-                                    </div>
-                                </div>
-
-                                {/* To Token */}
-                                <div className="space-y-3">
-                                    <label className="text-sm font-medium text-gray-700">To Token</label>
-                                    <div className="relative">
-                                        <select
-                                            value={toToken}
-                                            onChange={(e) => setToToken(e.target.value)}
-                                            className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                                        >
-                                            {commonTokens.map((token) => (
-                                                <option key={token.symbol} value={token.symbol}>
-                                                    {token.symbol} - {token.name}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                    <div className="bg-gray-50 rounded-lg p-3">
-                                        <div className="text-sm text-gray-600">
-                                            You'll receive: <span className="font-semibold text-emerald-600">
-                                                {quote ? quote.output : '0.00'} {toToken}
-                                            </span>
-                                        </div>
-                                        {quote && (
-                                            <div className="text-xs text-gray-500 mt-1">
-                                                Price: {quote.price}
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Get Quote Button */}
-                            <div className="mt-4">
-                                <Button
-                                    onClick={async () => {
-                                        if (amount && fromToken !== toToken) {
-                                            setIsQuoteLoading(true);
-                                            try {
-                                                // Get token addresses
-                                                const fromTokenData = commonTokens.find(t => t.symbol === fromToken);
-                                                const toTokenData = commonTokens.find(t => t.symbol === toToken);
-
-                                                if (fromTokenData && toTokenData) {
-                                                    // Convert amount to wei (assuming 18 decimals for simplicity)
-                                                    const amountInWei = (parseFloat(amount) * Math.pow(10, 18)).toString();
-
-                                                    // Fetch real quote from 1inch API
-                                                    const response = await fetch(`https://1inch-vercel-proxy-ecru.vercel.app/swap/v6.0/1/quote?src=${fromTokenData.address}&dst=${toTokenData.address}&amount=${amountInWei}`);
-                                                    const quoteData = await response.json();
-
-                                                    if (quoteData.toTokenAmount) {
-                                                        // Convert from wei to human readable
-                                                        const outputAmount = parseFloat(quoteData.toTokenAmount) / Math.pow(10, quoteData.toToken.decimals);
-                                                        const inputAmount = parseFloat(quoteData.fromTokenAmount) / Math.pow(10, quoteData.fromToken.decimals);
-                                                        const price = (inputAmount / outputAmount).toFixed(2);
-
-                                                        setQuote({
-                                                            price: `$${price}`,
-                                                            output: outputAmount.toFixed(6)
-                                                        });
-                                                    } else {
-                                                        // Fallback to reasonable estimate
-                                                        const ethPrice = 1850; // Approximate ETH price
-                                                        const outputAmount = fromToken === 'ETH' ?
-                                                            parseFloat(amount) * ethPrice :
-                                                            parseFloat(amount) / ethPrice;
-                                                        setQuote({
-                                                            price: `$${ethPrice}`,
-                                                            output: outputAmount.toFixed(6)
-                                                        });
-                                                    }
-                                                }
-                                            } catch (error) {
-                                                console.error('Error fetching quote:', error);
-                                                // Fallback to reasonable estimate
-                                                const ethPrice = 1850;
-                                                const outputAmount = fromToken === 'ETH' ?
-                                                    parseFloat(amount) * ethPrice :
-                                                    parseFloat(amount) / ethPrice;
-                                                setQuote({
-                                                    price: `$${ethPrice}`,
-                                                    output: outputAmount.toFixed(6)
-                                                });
-                                            } finally {
-                                                setIsQuoteLoading(false);
-                                            }
-                                        }
-                                    }}
-                                    disabled={!amount || fromToken === toToken || isQuoteLoading}
-                                    variant="outline"
-                                    className="w-full"
-                                >
-                                    {isQuoteLoading ? 'Getting Quote...' : 'Get Quote'}
-                                </Button>
-                            </div>
-                        </div>
-
-                        {/* Swap Options */}
-                        <div>
-                            <h3 className="text-lg font-semibold text-gray-900 mb-4">Choose Swap Method</h3>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                {swapOptions.map((option) => (
-                                    <div
-                                        key={option.id}
-                                        className={`relative border-2 rounded-xl p-4 cursor-pointer transition-all duration-200 ${selectedOption === option.id
-                                            ? 'border-emerald-500 bg-emerald-50 shadow-md'
-                                            : 'border-gray-200 bg-white hover:border-gray-300'
-                                            }`}
-                                        onClick={() => setSelectedOption(option.id as 'regular' | 'fusion' | 'mev-protect')}
-                                    >
-                                        {/* Radio Button */}
-                                        <div className="absolute top-3 right-3">
-                                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${selectedOption === option.id
-                                                ? 'border-emerald-500 bg-emerald-500'
-                                                : 'border-gray-300'
-                                                }`}>
-                                                {selectedOption === option.id && (
-                                                    <div className="w-2 h-2 bg-white rounded-full"></div>
-                                                )}
-                                            </div>
-                                        </div>
-
-                                        {/* Option Content */}
-                                        <div className="space-y-3">
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-2xl">{option.icon}</span>
-                                                <div>
-                                                    <h4 className="font-semibold text-gray-900">{option.title}</h4>
-                                                    <p className="text-sm text-gray-600">{option.description}</p>
-                                                </div>
-                                            </div>
 
 
-
-                                            {/* Details */}
-                                            <div className="space-y-2 text-sm">
-                                                <div className="flex justify-between">
-                                                    <span className="text-gray-600">Est. Time:</span>
-                                                    <span className="font-medium">{option.estimatedTime}</span>
-                                                </div>
-                                                <div className="flex justify-between">
-                                                    <span className="text-gray-600">Est. Gas:</span>
-                                                    <span className="font-medium">{option.estimatedGas}</span>
-                                                </div>
-                                            </div>
-
-                                            {/* Explanation */}
-                                            <p className="text-xs text-gray-500 leading-relaxed">
-                                                {option.explanation}
-                                            </p>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-
-                        {/* Action Buttons */}
-                        <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-gray-200">
-                            <Button
-                                onClick={handleFeedNow}
-                                disabled={isLoading}
-                                className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-3"
-                            >
-                                {isLoading ? (
-                                    <div className="flex items-center gap-2">
-                                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                        Feeding...
-                                    </div>
-                                ) : (
-                                    <div className="flex items-center gap-2">
-                                        🍽️ Feed Now
-                                    </div>
-                                )}
-                            </Button>
-                            <Button
-                                variant="outline"
-                                className="border-emerald-200 text-emerald-600 hover:bg-emerald-50"
-                                asChild
-                            >
-                                <Link to="/setup/feed">
-                                    🔄 Recurring Feed
-                                </Link>
-                            </Button>
-                        </div>
-                    </div>
-                </CardContent>
-            )}
-        </Card>
-    );
-}
-
-function PortfolioSection({ address }: { address: string }) {
+function PortfolioSection({ address, navigate }: { address: string; chainId: number; navigate: (path: string) => void }) {
     const [selectedToken, setSelectedToken] = useState<string | null>(null);
     const [isFeedModalOpen, setIsFeedModalOpen] = useState(false);
+    const [selectedSwapType, setSelectedSwapType] = useState<'regular' | 'fusion' | 'recurring'>('regular');
     const [tokenBalances, setTokenBalances] = useState<Array<{
         symbol: string;
         name: string;
         balance: string;
+        balanceInUnits: number;
         usdValue: number;
         logo: string;
         address: string;
     }>>([]);
     const [isLoading, setIsLoading] = useState(true);
 
+    // Get real-time prices for major tokens on Base
+    const ethPrice = useTokenPrice(8453, '0x4200000000000000000000000000000000000006'); // WETH on Base
+    const usdcPrice = useTokenPrice(8453, '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'); // USDC on Base
+    const daiPrice = useTokenPrice(8453, '0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb'); // DAI on Base
+    const usdtPrice = useTokenPrice(8453, '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9'); // USDT on Base
+    const wbtcPrice = useTokenPrice(8453, '0x2Ae3F1Ec7F1F5012CFEab0185bfc7aa3cf0DEc22'); // WBTC on Base
+
     // Real token balances from 1inch API
     useEffect(() => {
         async function fetchBalances() {
             try {
                 setIsLoading(true);
-                console.log('Fetching balances for address:', address);
+                const balances = await fetchAllBalances(address, 8453);
 
+                if (!balances || Object.keys(balances).length === 0) {
+                    console.log('PortfolioSection: No balances found - this could mean:');
+                    console.log('PortfolioSection: 1. Wallet has no tokens on Base chain');
+                    console.log('PortfolioSection: 2. Balance API requires API key');
+                    console.log('PortfolioSection: 3. Wrong network selected');
+                    console.log('PortfolioSection: 4. API endpoint issue');
+                }
 
-
-                const balances = await fetchAllBalances(address, 1);
-                console.log('Received balances:', balances);
-                console.log('Balances type:', typeof balances);
-                console.log('Balances keys:', Object.keys(balances));
-                console.log('Balances length:', Object.keys(balances).length);
-
-                // Convert balances to our format
-                const formattedBalances = Object.entries(balances).map(([tokenAddress, balanceData]) => {
-                    const data = balanceData as { symbol: string; balance: string; decimals: number };
-
-                    // Format balance based on token decimals
-                    let formattedBalance: string;
-                    if (data.decimals === 6) {
-                        // For 6-decimal tokens (USDC, USDT), show 2 decimal places
-                        const balanceInUnits = parseFloat(data.balance) / Math.pow(10, data.decimals);
-                        formattedBalance = balanceInUnits.toFixed(2);
-                    } else {
-                        // For 18-decimal tokens (ETH, DAI), use formatEther
-                        formattedBalance = formatEther(BigInt(data.balance));
-                    }
-
+                // Format balances for display
+                const formattedBalances = Object.entries(balances).map(([address, balanceData]) => {
+                    const balanceInUnits = parseFloat(balanceData.balance) / Math.pow(10, balanceData.decimals);
                     return {
-                        symbol: data.symbol,
-                        name: data.symbol, // We'll get real name from metadata later
-                        balance: formattedBalance,
-                        usdValue: 0, // We'll calculate this with price data
-                        logo: data.symbol, // Use symbol as logo
-                        address: tokenAddress
+                        symbol: balanceData.symbol,
+                        name: balanceData.symbol, // Will be updated with real metadata
+                        balance: balanceInUnits.toFixed(6),
+                        balanceInUnits,
+                        usdValue: 0, // Will be calculated with price data
+                        logo: balanceData.symbol,
+                        address
                     };
                 });
 
-                // Fetch token metadata for better names and logos
+                // Try to enhance with token metadata
                 try {
-                    const tokenMetadata = await fetchTokenMetadata(1);
+                    const tokenMetadata = await fetchTokenMetadata(8453);
                     const metadataMap = new Map(tokenMetadata.map((token: TokenMetadataResponse) => [token.address.toLowerCase(), token]));
 
                     // Update balances with real metadata
@@ -512,65 +284,103 @@ function PortfolioSection({ address }: { address: string }) {
                         return balance;
                     });
 
-                    setTokenBalances(enhancedBalances);
+                    // Calculate USD values using real-time prices for Base tokens
+                    const priceMap = new Map([
+                        ['0x4200000000000000000000000000000000000006', ethPrice.data?.price || 0], // WETH on Base
+                        ['0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', usdcPrice.data?.price || 1], // USDC on Base
+                        ['0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb', daiPrice.data?.price || 1], // DAI on Base
+                        ['0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9', usdtPrice.data?.price || 1], // USDT on Base
+                        ['0x2Ae3F1Ec7F1F5012CFEab0185bfc7aa3cf0DEc22', wbtcPrice.data?.price || 0], // WBTC on Base
+                    ]);
+
+                    const balancesWithPrices = enhancedBalances.map(balance => {
+                        const price = priceMap.get(balance.address.toLowerCase()) || 0;
+                        const usdValue = balance.balanceInUnits * parseFloat(price.toString());
+                        return {
+                            ...balance,
+                            usdValue
+                        };
+                    });
+
+                    setTokenBalances(balancesWithPrices);
                 } catch (metadataError) {
                     console.error('Error fetching token metadata:', metadataError);
-                    setTokenBalances(formattedBalances);
-                }
 
-                console.log('Formatted balances:', formattedBalances);
+                    // Calculate USD values for fallback balances on Base
+                    const priceMap = new Map([
+                        ['0x4200000000000000000000000000000000000006', ethPrice.data?.price || 0], // WETH on Base
+                        ['0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', usdcPrice.data?.price || 1], // USDC on Base
+                        ['0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb', daiPrice.data?.price || 1], // DAI on Base
+                        ['0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9', usdtPrice.data?.price || 1], // USDT on Base
+                        ['0x2Ae3F1Ec7F1F5012CFEab0185bfc7aa3cf0DEc22', wbtcPrice.data?.price || 0], // WBTC on Base
+                    ]);
+
+                    const balancesWithPrices = formattedBalances.map(balance => {
+                        const price = priceMap.get(balance.address.toLowerCase()) || 0;
+                        return {
+                            ...balance,
+                            usdValue: balance.balanceInUnits * parseFloat(price.toString())
+                        };
+                    });
+
+                    setTokenBalances(balancesWithPrices);
+                }
 
                 // If no tokens found, use fallback data for demonstration
                 if (formattedBalances.length === 0) {
-                    console.log('No tokens found, using fallback data');
                     setTokenBalances([
                         {
-                            symbol: 'ETH',
-                            name: 'Ethereum',
+                            symbol: 'WETH',
+                            name: 'Wrapped Ether',
                             balance: '0.0015',
+                            balanceInUnits: 0.0015,
                             usdValue: 2.85,
-                            logo: 'ETH',
-                            address: '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'
+                            logo: 'WETH',
+                            address: '0x4200000000000000000000000000000000000006'
                         },
                         {
                             symbol: 'USDC',
                             name: 'USD Coin',
                             balance: '0.00',
+                            balanceInUnits: 0.00,
                             usdValue: 0.00,
                             logo: 'USDC',
-                            address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
+                            address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'
                         },
                         {
                             symbol: 'DAI',
                             name: 'Dai',
                             balance: '0.00',
+                            balanceInUnits: 0.00,
                             usdValue: 0.00,
                             logo: 'DAI',
-                            address: '0x6B175474E89094C44Da98b954EedeAC495271d0F'
+                            address: '0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb'
                         }
                     ]);
                 } else {
                     setTokenBalances(formattedBalances);
                 }
             } catch (error) {
-                console.error('Error fetching balances:', error);
+                console.error('PortfolioSection: Error fetching balances:', error);
                 // Fallback to mock data if API fails
                 setTokenBalances([
                     {
-                        symbol: 'ETH',
-                        name: 'Ethereum',
+                        symbol: 'WETH',
+                        name: 'Wrapped Ether',
                         balance: '2.45',
+                        balanceInUnits: 2.45,
                         usdValue: 4532.50,
-                        logo: 'ETH',
-                        address: '0x0000000000000000000000000000000000000000'
+                        logo: 'WETH',
+                        address: '0x4200000000000000000000000000000000000006'
                     },
                     {
                         symbol: 'USDC',
                         name: 'USD Coin',
                         balance: '1250.00',
+                        balanceInUnits: 1250.00,
                         usdValue: 1250.00,
                         logo: 'USDC',
-                        address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
+                        address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'
                     }
                 ]);
             } finally {
@@ -579,13 +389,11 @@ function PortfolioSection({ address }: { address: string }) {
         }
 
         if (address) {
-            console.log('Wallet connected, fetching balances...');
             fetchBalances();
         } else {
-            console.log('No wallet connected, showing loading state');
             setIsLoading(false);
         }
-    }, [address]);
+    }, [address, ethPrice.data?.price, usdcPrice.data?.price, daiPrice.data?.price, usdtPrice.data?.price, wbtcPrice.data?.price]);
 
 
 
@@ -690,14 +498,25 @@ function PortfolioSection({ address }: { address: string }) {
                         </div>
 
                         <div className="space-y-3 mb-6">
-                            <Button className="w-full bg-emerald-500 hover:bg-emerald-600 text-white">
+                            <Button
+                                className="w-full bg-emerald-500 hover:bg-emerald-600 text-white"
+                                onClick={() => setSelectedSwapType('regular')}
+                            >
                                 ⚡ Regular Swap
                             </Button>
-                            <Button variant="outline" className="w-full border-emerald-200 text-emerald-600 hover:bg-emerald-50">
+                            <Button
+                                variant="outline"
+                                className="w-full border-emerald-200 text-emerald-600 hover:bg-emerald-50"
+                                onClick={() => setSelectedSwapType('fusion')}
+                            >
                                 🛡️ Fusion (MEV Protected)
                             </Button>
-                            <Button variant="outline" className="w-full border-emerald-200 text-emerald-600 hover:bg-emerald-50">
-                                🔒 MEV Protect
+                            <Button
+                                variant="outline"
+                                className="w-full border-emerald-200 text-emerald-600 hover:bg-emerald-50"
+                                onClick={() => setSelectedSwapType('recurring')}
+                            >
+                                🔄 Recurring Feed
                             </Button>
                         </div>
 
@@ -709,7 +528,16 @@ function PortfolioSection({ address }: { address: string }) {
                             >
                                 Cancel
                             </Button>
-                            <Button className="flex-1 bg-emerald-500 hover:bg-emerald-600">
+                            <Button
+                                className="flex-1 bg-emerald-500 hover:bg-emerald-600"
+                                onClick={() => {
+                                    if (selectedSwapType === 'recurring') {
+                                        navigate('/setup/feed');
+                                    } else {
+                                        alert(`${selectedSwapType === 'regular' ? 'Regular' : 'Fusion'} swap functionality coming soon!`);
+                                    }
+                                }}
+                            >
                                 Feed Pet
                             </Button>
                         </div>
@@ -791,13 +619,74 @@ function PetHappinessBar({ orderHash, disabled }: { orderHash: string; disabled?
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 function FeedHistoryChart({ orderHash, disabled }: { orderHash: string; disabled?: boolean }) {
+    // Demo data for feeding history
+    const demoData = [
+        { time: '9AM', amount: 0.1, token: 'ETH', happiness: 85 },
+        { time: '12PM', amount: 0.15, token: 'ETH', happiness: 90 },
+        { time: '3PM', amount: 0.08, token: 'ETH', happiness: 75 },
+        { time: '6PM', amount: 0.12, token: 'ETH', happiness: 88 },
+        { time: '9PM', amount: 0.1, token: 'ETH', happiness: 82 },
+        { time: '12AM', amount: 0.05, token: 'ETH', happiness: 70 },
+        { time: '3AM', amount: 0.08, token: 'ETH', happiness: 78 },
+    ];
+
     if (disabled) {
         return (
-            <div className="h-80 bg-gray-50 rounded-lg flex items-center justify-center text-gray-500 text-lg">
-                Demo mode - Start a DCA to see real feed history
+            <div className="h-full flex">
+                {/* Left side - Stats */}
+                <div className="w-1/4 flex flex-col justify-start space-y-1 pt-2 pr-4">
+                    <div className="bg-emerald-50 rounded p-1.5 text-center">
+                        <div className="text-sm font-bold text-emerald-700">{demoData.length}</div>
+                        <div className="text-xs text-gray-600">Feeds Today</div>
+                    </div>
+                    <div className="bg-blue-50 rounded p-1.5 text-center">
+                        <div className="text-sm font-bold text-blue-700">0.68 ETH</div>
+                        <div className="text-xs text-gray-600">Total Fed</div>
+                    </div>
+                    <div className="bg-purple-50 rounded p-1.5 text-center">
+                        <div className="text-sm font-bold text-purple-700">81%</div>
+                        <div className="text-xs text-gray-600">Avg Happiness</div>
+                    </div>
+                </div>
+
+                {/* Right side - Chart */}
+                <div className="w-3/4 flex flex-col">
+                    <div className="flex items-center justify-between mb-1">
+                        <h3 className="text-xs font-semibold text-gray-700">Last 24 Hours</h3>
+                        <span className="text-xs text-emerald-600 bg-emerald-50 px-1 py-0.5 rounded-full">Demo</span>
+                    </div>
+
+                    {/* Chart Area */}
+                    <div className="flex-1 relative min-h-0 max-h-48">
+                        {/* Y-axis labels */}
+                        <div className="absolute left-0 top-0 bottom-0 flex flex-col justify-between text-xs text-gray-500 w-4">
+                            <span>100%</span>
+                            <span>75%</span>
+                            <span>50%</span>
+                            <span>25%</span>
+                            <span>0%</span>
+                        </div>
+
+                        {/* Chart bars */}
+                        <div className="ml-4 h-full flex items-end justify-between gap-0.5">
+                            {demoData.map((entry, index) => (
+                                <div key={index} className="flex-1 flex flex-col items-center">
+                                    <div
+                                        className="w-full bg-gradient-to-t from-emerald-400 to-emerald-300 rounded-t-sm transition-all hover:from-emerald-500 hover:to-emerald-400"
+                                        style={{ height: `${entry.happiness}%` }}
+                                    ></div>
+                                    <div className="text-xs text-gray-500 mt-1 transform -rotate-45 origin-left whitespace-nowrap">
+                                        {entry.time}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
             </div>
         );
     }
+
     return (
         <div className="h-80 bg-gray-50 rounded-lg flex items-center justify-center text-gray-500 text-lg">
             No feed history yet

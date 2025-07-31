@@ -3,13 +3,17 @@ import { Web3Providers } from '@/lib/wagmi';
 import ConnectButton from '@/components/ConnectButton';
 import { Button } from '@/components/ui/button';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { Toaster } from '@/components/ui/toaster';
+import { CacheDebug } from '@/components/ui/cache-debug';
 import FeedWizard from './pages/dca/setup';
 import ReviewFeed from './pages/dca/review';
 import Confirmation from './pages/dca/confirmation';
 import MyFeeds from './pages/dca/feeds';
 import Dashboard from './pages/dashboard';
-import AdvancedOrders from './pages/advanced-orders';
+import MarketAnalysis from './pages/market-analysis';
 import HowItWorks from './pages/how-it-works';
+import ApiTestPage from './pages/api-test';
+import FeedNowPage from './pages/feed-now';
 
 
 
@@ -28,9 +32,9 @@ export default function App() {
                 Dashboard
               </Button>
             </Link>
-            <Link to="/advanced-orders">
+            <Link to="/market-analysis">
               <Button variant="outline" className="text-gray-700">
-                Analytics
+                Market Analysis
               </Button>
             </Link>
             <Link to="/dca/feeds">
@@ -41,6 +45,11 @@ export default function App() {
             <Link to="/how-it-works">
               <Button variant="outline" className="text-gray-700">
                 How It Works
+              </Button>
+            </Link>
+            <Link to="/api-test">
+              <Button variant="outline" className="text-gray-700">
+                API Test
               </Button>
             </Link>
 
@@ -57,7 +66,7 @@ export default function App() {
           <ErrorBoundary>
             <Routes>
               <Route path="/" element={<Dashboard />} />
-              <Route path="/advanced-orders" element={<AdvancedOrders />} />
+              <Route path="/market-analysis" element={<MarketAnalysis />} />
 
 
 
@@ -66,11 +75,15 @@ export default function App() {
               <Route path="/setup/feed/confirmation" element={<Confirmation />} />
               <Route path="/dca/feeds" element={<MyFeeds />} />
               <Route path="/how-it-works" element={<HowItWorks />} />
+              <Route path="/api-test" element={<ApiTestPage />} />
+              <Route path="/feed-now" element={<FeedNowPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </ErrorBoundary>
         </main>
       </div>
+      <Toaster />
+      <CacheDebug />
     </Web3Providers>
   );
 }
