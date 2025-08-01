@@ -35,8 +35,9 @@ export function calculateDcaParameters(params: DcaCalculationParams): DcaCalcula
     // Stop by total amount
     totalCycles = Math.ceil(totalAmount / chunkIn);
     totalAmountToDca = totalAmount;
-    estimatedDays = Math.ceil((totalCycles * interval) / (24 * 60 * 60));
-    estimatedEndDate = new Date(Date.now() + (estimatedDays * 24 * 60 * 60 * 1000)).toISOString();
+    const totalSeconds = totalCycles * interval;
+    estimatedDays = Math.ceil(totalSeconds / (24 * 60 * 60));
+    estimatedEndDate = new Date(Date.now() + (totalSeconds * 1000)).toISOString();
   } else if (endDate) {
     // Stop by end date
     const endDateUtc = new Date(endDate).getTime();

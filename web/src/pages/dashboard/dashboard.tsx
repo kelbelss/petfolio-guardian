@@ -3,12 +3,14 @@ import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { hippoGame } from '@/lib/hippoGame';
+
 import { PriceFeedWidget } from '@/pages/dashboard/price-feed-widget';
 
 export default function Dashboard() {
     const navigate = useNavigate();
-    const orderHash = '0x0';
+    const [hippoName, setHippoName] = React.useState<string>('');
+
 
     return (
         <div className="w-full bg-[#effdf4] min-h-screen">
@@ -17,7 +19,37 @@ export default function Dashboard() {
                 <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
                     {/* Left Side - Hippo Section */}
                     <div className="lg:col-span-2">
-                        <div className="">
+                        <div className="text-center pr-14">
+                            {/* Hippo Name */}
+                            <div className="mb-4">
+                                {hippoName ? (
+                                    <div>
+                                        <h3 className="text-4xl font-bold text-emerald-600 mb-1">{hippoName}</h3>
+                                        <button
+                                            onClick={() => setHippoName('')}
+                                            className="text-xs text-emerald-500 hover:text-emerald-700"
+                                        >
+                                            Change name
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div>
+                                        <input
+                                            type="text"
+                                            placeholder="Name your hippo..."
+                                            className="w-64 px-4 py-2 border-2 border-emerald-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-center bg-white shadow-sm"
+                                            onKeyPress={(e) => {
+                                                if (e.key === 'Enter' && e.currentTarget.value.trim()) {
+                                                    setHippoName(e.currentTarget.value.trim());
+                                                    e.currentTarget.value = '';
+                                                }
+                                            }}
+                                        />
+                                        <p className="text-xs text-gray-500 mt-1">Press Enter to save</p>
+                                    </div>
+                                )}
+                            </div>
+
                             <div className="w-[500px] h-[500px] mb-6">
                                 <img
                                     src="/src/assets/HipposHappy.gif"
@@ -30,13 +62,25 @@ export default function Dashboard() {
 
                     {/* Right Side - Dashboard Content */}
                     <div className="lg:col-span-3 space-y-6">
+                        {/* Explanation Header */}
+                        <div className="mb-6 p-6 bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-lg shadow-md">
+                            <h2 className="text-2xl font-bold text-white mb-2">
+                                🍽️ Feed {hippoName ? hippoName : 'Your Hippo'}, Build Your Portfolio
+                            </h2>
+                            <p className="text-emerald-100 text-base">Your hippo's health depends on regular DCA feeding. Start a DCA schedule to keep them happy!</p>
+                        </div>
+
                         {/* Vitals Bar Row */}
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                             <div className="md:col-span-2">
                                 <VitalCard icon="⚕️" title="Health" value={<PetHappinessBar />} />
                             </div>
                             <VitalCard icon="🍽️" title="Hunger" value={<Countdown />} />
-                            <VitalCard icon="💰" title="Fed Value" value="0" />
+                            <VitalCard icon="💰" title="Total Fed" value={
+                                <div className="pt-1">
+                                    <span className="font-mono text-emerald-600 text-xs">0</span>
+                                </div>
+                            } />
                         </div>
 
                         {/* Feed Now Section */}
@@ -76,27 +120,7 @@ export default function Dashboard() {
                             <PriceFeedWidget />
                         </div>
 
-                        {/* Real-Time Chart + History */}
-                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                            <div className="lg:col-span-2">
-                                <div className="bg-white border border-green-200 rounded-xl p-8 shadow-sm hover:shadow-lg transition-shadow h-80">
-                                    <h2 className="text-2xl font-semibold text-green-600 mb-6 flex items-center space-x-2">
-                                        <span>Feed History</span>
-                                        <Badge className="bg-amber-50 text-amber-700 text-xs">Demo</Badge>
-                                    </h2>
 
-                                </div>
-                            </div>
-                            <div className="lg:col-span-1">
-                                <div className="bg-white border border-green-200 rounded-xl p-8 shadow-sm hover:shadow-lg transition-shadow h-80 overflow-hidden">
-                                    <h2 className="text-2xl font-semibold text-green-600 mb-6 flex items-center space-x-2">
-                                        <span>Feed Schedule</span>
-                                        <Badge className="bg-amber-50 text-amber-700 text-xs">Demo</Badge>
-                                    </h2>
-
-                                </div>
-                            </div>
-                        </div>
 
 
 
@@ -168,8 +192,21 @@ function FeedNowSection({ navigate }: { navigate: (path: string) => void }) {
                                             ? 'border-emerald-500 bg-emerald-50 shadow-md'
                                             : 'border-gray-200 bg-white hover:border-gray-300'}
                                     `}
-                                    onClick={() => setSelectedOption(option.id as typeof selectedOption)}
+                                    onClick={() => {
+                                        if (option.id !== 'fusion' && option.id !== 'fusion-plus') {
+                                            setSelectedOption(option.id as typeof selectedOption);
+                                        }
+                                    }}
                                 >
+                                    {/* Coming Soon Banner for Fusion and Fusion+ */}
+                                    {(option.id === 'fusion' || option.id === 'fusion-plus') && (
+                                        <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 z-20">
+                                            <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 text-white px-4 py-1 rounded-full text-xs font-semibold shadow-lg">
+                                                🚀 Coming Soon
+                                            </div>
+                                        </div>
+                                    )}
+
                                     {/* radio indicator */}
                                     <div className="absolute top-3 right-3">
                                         <div className={`
@@ -224,7 +261,7 @@ function FeedNowSection({ navigate }: { navigate: (path: string) => void }) {
                         </div>
                     </div>
                     <div className="flex gap-3 pt-4 border-t border-gray-200">
-                        <Button disabled className="flex-1 bg-emerald-400 text-white">
+                        <Button className="flex-1 bg-emerald-400 hover:bg-emerald-500 text-white shadow-sm hover:shadow-md transition-all">
                             🍽️ Feed Now
                         </Button>
                         <Button
@@ -285,30 +322,43 @@ function VitalCard({
 
 function Countdown() {
     return (
-        <span className="font-mono text-emerald-600 text-sm">
-            Next snack in 00:00:00
-        </span>
+        <div className="pt-1">
+            <span className="font-mono text-emerald-600 text-xs">
+                Next snack in 00:00:00
+            </span>
+        </div>
     );
 }
 
 function PetHappinessBar() {
+    const state = hippoGame.getState();
+    const snackPercentage = hippoGame.getSnackPercentage();
+
+    // Determine color based on snack level
+    let barColor = 'bg-emerald-400'; // Default green
+    if (state.snacks <= 3) {
+        barColor = 'bg-red-500'; // Red for hungry (0-3 snacks)
+    } else if (state.snacks <= 6) {
+        barColor = 'bg-yellow-500'; // Yellow for neutral (4-6 snacks)
+    }
+
     return (
         <div className="space-y-2">
-            <div className="h-2 rounded bg-gray-200 overflow-hidden">
-                <div className="h-full bg-emerald-400 w-0 transition-all duration-300"></div>
+            <div className="h-4 rounded bg-gray-200 overflow-hidden relative">
+                <div className={`h-full ${barColor} w-[${snackPercentage}%] transition-all duration-300`}></div>
+                <div className="absolute inset-0 flex items-center justify-between px-2">
+                    <span className="text-xs text-gray-700 font-bold">1</span>
+                    <span className="text-xs text-gray-700 font-bold">10</span>
+                </div>
             </div>
-            <span className="text-xs text-gray-600">HF 0% – Doctor Armed</span>
+            <div className="text-center">
+                <span className="text-xs font-mono text-gray-600">{state.snacks}/10</span>
+            </div>
         </div>
     );
 }
 
-function FeedHistoryChart() {
-    return (
-        <div className="h-80 bg-gray-50 rounded-lg flex items-center justify-center text-gray-500 text-lg">
-            0
-        </div>
-    );
-}
+
 
 
 

@@ -99,7 +99,7 @@ export default function TokenSelect({
         <div className="relative w-full" ref={dropdownRef}>
             {/* Input field */}
             <div
-                className="w-full h-10 border rounded px-3 flex items-center justify-between bg-white cursor-pointer hover:border-gray-400 transition-colors"
+                className="w-full h-10 border rounded px-3 flex items-center justify-between bg-white cursor-pointer hover:border-emerald-400 transition-colors"
                 onClick={handleInputClick}
             >
                 {selectedToken ? (
@@ -115,10 +115,10 @@ export default function TokenSelect({
                             />
                         )}
                         <div className="flex flex-col min-w-0">
-                            <span className="text-sm font-medium text-gray-900 truncate">
+                            <span className="text-sm font-medium text-emerald-700 truncate">
                                 {selectedToken.symbol}
                             </span>
-                            <span className="text-xs text-gray-500 truncate">
+                            <span className="text-xs text-emerald-500 truncate">
                                 {selectedToken.name}
                             </span>
                         </div>
@@ -163,7 +163,7 @@ export default function TokenSelect({
                             filteredTokens.map((token) => (
                                 <div
                                     key={token.address}
-                                    className="p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+                                    className="p-3 hover:bg-emerald-50 cursor-pointer border-b border-emerald-100 last:border-b-0"
                                     onClick={() => handleTokenSelect(token)}
                                 >
                                     <div className="flex items-center gap-3">
@@ -179,7 +179,7 @@ export default function TokenSelect({
                                         )}
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-2">
-                                                <span className="text-sm font-medium text-gray-900">
+                                                <span className="text-sm font-medium text-emerald-700">
                                                     {token.symbol}
                                                 </span>
                                                 <Badge variant="secondary" className="text-xs">
@@ -201,7 +201,7 @@ export default function TokenSelect({
 
                     {/* Results count */}
                     {searchTerm && filteredTokens.length > 0 && (
-                        <div className="p-2 border-t bg-gray-50 text-xs text-gray-500">
+                        <div className="p-2 border-t bg-emerald-50 text-xs text-emerald-600">
                             Showing {filteredTokens.length} of {allTokens.length} tokens
                         </div>
                     )}

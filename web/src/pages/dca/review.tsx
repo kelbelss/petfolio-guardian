@@ -85,6 +85,7 @@ export default function DcaReview() {
     const dcaParams = calculateDcaParameters({
         chunkIn: draft.chunkIn,
         endDate: draft.endDate,
+        totalAmount: draft.totalAmount,
         interval: draft.interval,
         slippageTolerance: draft.slippageTolerance,
         quoteAmount: rawAmount,
@@ -153,6 +154,8 @@ export default function DcaReview() {
                         createdAt: Date.now(),
                         nextFillTime: Date.now() + draft.interval * 1000,
                         endDate: draft.endDate,
+                        stopCondition: draft.stopCondition,
+                        totalAmount: draft.totalAmount,
                     })
                 );
 

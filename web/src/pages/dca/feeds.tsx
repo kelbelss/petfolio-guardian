@@ -20,6 +20,8 @@ interface OrderMeta {
     createdAt: number
     nextFillTime: number
     endDate?: string
+    stopCondition?: 'end-date' | 'total-amount'
+    totalAmount?: number
 }
 
 function formatIntervalFull(seconds: number): string {
@@ -60,14 +62,14 @@ function FeedCard({
             <CardContent className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                     <div>
-                        <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">From</h4>
-                        <p className="font-mono text-sm bg-gray-50 px-2 py-1 rounded text-gray-700 truncate">
+                        <h4 className="text-xs font-medium text-emerald-600 uppercase tracking-wide mb-1">From</h4>
+                        <p className="font-mono text-sm bg-emerald-50 px-2 py-1 rounded text-emerald-700 truncate">
                             {formatAddress(feed.srcToken)}
                         </p>
                     </div>
                     <div>
-                        <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">To</h4>
-                        <p className="font-mono text-sm bg-gray-50 px-2 py-1 rounded text-gray-700 truncate">
+                        <h4 className="text-xs font-medium text-emerald-600 uppercase tracking-wide mb-1">To</h4>
+                        <p className="font-mono text-sm bg-emerald-50 px-2 py-1 rounded text-emerald-700 truncate">
                             {formatAddress(feed.dstToken)}
                         </p>
                     </div>
@@ -87,28 +89,53 @@ function FeedCard({
                     </div>
                 </div>
 
-                {feed.endDate && (
+                <div className="grid grid-cols-2 gap-4">
+                    <div>
+                        <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Stop Condition</h4>
+                        <p className="text-sm text-gray-700 capitalize">
+                            {feed.stopCondition === 'total-amount' ? 'Total Amount' : 'End Date'}
+                        </p>
+                    </div>
+                    <div>
+                        <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Status</h4>
+                        <Badge className={`text-xs ${feed.stopCondition === 'total-amount'
+                            ? 'bg-blue-100 text-blue-700 border-blue-200'
+                            : new Date(feed.endDate || '').getTime() > Date.now()
+                                ? 'bg-green-100 text-green-700 border-green-200'
+                                : 'bg-red-100 text-red-700 border-red-200'
+                            }`}>
+                            {feed.stopCondition === 'total-amount'
+                                ? 'Amount-based'
+                                : new Date(feed.endDate || '').getTime() > Date.now()
+                                    ? 'Active'
+                                    : 'Ended'
+                            }
+                        </Badge>
+                    </div>
+                </div>
+
+                {feed.endDate && feed.stopCondition === 'end-date' && (
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">End Date</h4>
                             <p className="text-sm text-gray-700">{formatDate(new Date(feed.endDate).getTime())}</p>
                         </div>
+                    </div>
+                )}
+
+                {feed.totalAmount && feed.stopCondition === 'total-amount' && (
+                    <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Status</h4>
-                            <Badge className={`text-xs ${new Date(feed.endDate).getTime() > Date.now()
-                                ? 'bg-green-100 text-green-700 border-green-200'
-                                : 'bg-red-100 text-red-700 border-red-200'
-                                }`}>
-                                {new Date(feed.endDate).getTime() > Date.now() ? 'Active' : 'Ended'}
-                            </Badge>
+                            <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Total Amount</h4>
+                            <p className="text-sm text-gray-700">${feed.totalAmount.toFixed(2)}</p>
                         </div>
                     </div>
                 )}
             </CardContent>
 
-            <CardFooter className="pt-4 border-t border-gray-100">
+            <CardFooter className="pt-4 border-t border-emerald-100">
                 <div className="w-full flex justify-between items-center">
-                    <p className="text-xs text-gray-400 font-mono">
+                    <p className="text-xs text-emerald-500 font-mono">
                         {formatAddress(feed.orderHash)}
                     </p>
                     <Button
@@ -116,7 +143,7 @@ function FeedCard({
                         size="sm"
                         onClick={() => onCancel(feed)}
                         disabled={isCancelling}
-                        className="border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300"
+                        className="border-emerald-200 text-emerald-600 hover:bg-emerald-50 hover:border-emerald-300"
                     >
                         {isCancelling ? '⏳' : '❌'} Cancel
                     </Button>
@@ -143,10 +170,12 @@ export default function MyFeeds() {
             const parsed = JSON.parse(raw)
             // allow either a single object or an array
             const list = Array.isArray(parsed) ? parsed : [parsed]
-            // Ensure all feeds have the endDate field for backward compatibility
+            // Ensure all feeds have the required fields for backward compatibility
             const normalizedList = list.map(feed => ({
                 ...feed,
-                endDate: feed.endDate || undefined
+                endDate: feed.endDate || undefined,
+                stopCondition: feed.stopCondition || 'end-date',
+                totalAmount: feed.totalAmount || undefined
             }))
             setFeeds(normalizedList)
         } catch {
