@@ -1,5 +1,6 @@
 import { Component } from 'react';
 import type { ErrorInfo, ReactNode } from 'react';
+import { Link } from 'react-router-dom'   // ⬅️ add
 
 interface Props {
     children: ReactNode;
@@ -39,17 +40,29 @@ export class ErrorBoundary extends Component<Props, State> {
                             </svg>
                         </div>
                         <div className="mt-4 text-center">
-                            <h3 className="text-lg font-medium text-gray-900">Something went wrong</h3>
+                            <h3 className="text-lg font-medium text-gray-900">
+                                Oops — our hippo hiccupped!
+                            </h3>
                             <p className="mt-2 text-sm text-gray-500">
                                 {this.state.error?.message || 'An unexpected error occurred'}
                             </p>
-                            <div className="mt-4">
+                            <div className="mt-4 flex gap-4 justify-center">
                                 <button
-                                    onClick={() => window.location.reload()}
+                                    onClick={() => window.location.replace(window.location.pathname)}
                                     className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
                                 >
                                     Reload Page
                                 </button>
+
+                                <Link
+                                    to="/"
+                                    className="inline-flex items-center px-4 py-2 border border-transparent
+                                               text-sm font-medium rounded-md text-emerald-700
+                                               bg-emerald-100 hover:bg-emerald-200 focus:outline-none
+                                               focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500"
+                                >
+                                    Back to Dashboard
+                                </Link>
                             </div>
                         </div>
                     </div>
