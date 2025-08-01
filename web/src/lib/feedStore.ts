@@ -3,14 +3,20 @@ import { create } from 'zustand';
 export interface FeedDraft {
   srcToken: string;
   dstToken: string;
-  total: number;
+  chunkIn: number;
+  slippageTolerance: number;
   interval: number;
+  stopCondition: 'end-date' | 'total-amount';
+  endDate?: string;
+  totalAmount?: number;
   minOut?: string;
 }
 
 export const useFeedStore = create<FeedDraft>(() => ({
   srcToken: '',
   dstToken: '',
-  total: 0,
-  interval: 86400,
+  chunkIn: 0.01,
+  slippageTolerance: 0.5,
+  interval: 21600, // 6 hours default
+  stopCondition: 'end-date',
 })); 
