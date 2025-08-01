@@ -1,0 +1,21 @@
+[
+  {
+    "inputs": [{ "name": "permit2Data", "type": "bytes" }],
+    "name": "permitTransferFrom",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "name": "token", "type": "address" },
+      { "name": "from", "type": "address" },
+      { "name": "to", "type": "address" },
+      { "name": "amount", "type": "uint256" }
+    ],
+    "name": "transferFrom",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  }
+]
