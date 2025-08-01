@@ -177,7 +177,7 @@ export default function MyFeeds() {
 
     if (feeds.length === 0) {
         return (
-            <div className="w-full bg-gradient-to-br from-green-50 to-emerald-50 min-h-screen">
+            <div className="w-full bg-[#effdf4] min-h-screen">
                 <div className="max-w-6xl mx-auto p-8 text-center">
                     <div className="bg-white rounded-2xl p-12 border border-green-200 shadow-lg max-w-2xl mx-auto">
                         <h2 className="text-4xl font-bold mb-4 text-emerald-700">My Feeds</h2>
@@ -195,7 +195,7 @@ export default function MyFeeds() {
     }
 
     return (
-        <div className="w-full bg-gradient-to-br from-green-50 to-emerald-50 min-h-screen">
+        <div className="w-full bg-[#effdf4] min-h-screen">
             <div className="max-w-6xl mx-auto p-8">
                 <div className="mb-8">
                     <h2 className="text-4xl font-bold text-emerald-700 mb-2">My Feeds</h2>

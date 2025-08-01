@@ -12,6 +12,7 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import ApiPlayground from '@/pages/api-playground';
 import SwapPlayground from '@/pages/swap-playground';
 import MarketAnalysis from '@/pages/market-analysis/market-analysis';
+import HowItWorks from '@/pages/how-it-works';
 import GasBadge from '@/components/GasBadge';
 import WalletSummary from '@/components/WalletSummary';
 
@@ -51,6 +52,11 @@ export default function App() {
               Swap
             </Button>
           </Link>
+          <Link to="/how-it-works">
+            <Button variant="outline" className="text-gray-700">
+              How It Works
+            </Button>
+          </Link>
         </nav>
         <div className="flex items-center gap-4">
           <GasBadge />
@@ -71,6 +77,7 @@ export default function App() {
           <Route path="/dca/feeds" element={<MyFeeds />} />
           <Route path="/playground" element={<ApiPlayground />} />
           <Route path="/swap" element={<SwapPlayground />} />
+          <Route path="/how-it-works" element={<HowItWorks />} />
           <Route path="*" element={<div className="max-w-3xl mx-auto p-6">Not Found</div>} />
         </Routes>
       </ErrorBoundary>

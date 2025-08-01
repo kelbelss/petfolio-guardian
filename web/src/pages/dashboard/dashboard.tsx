@@ -11,18 +11,18 @@ export default function Dashboard() {
     const orderHash = '0x0';
 
     return (
-        <div className="w-full bg-gradient-to-br from-green-50 to-emerald-50 min-h-screen">
+        <div className="w-full bg-[#effdf4] min-h-screen">
             <div className="max-w-screen-2xl mx-auto py-12">
                 {/* Main Content - Hippo Left, Content Right */}
                 <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
                     {/* Left Side - Hippo Section */}
                     <div className="lg:col-span-2">
-                        <div className="bg-gradient-to-b from-green-50 to-white rounded-2xl py-8 h-auto w-[500px] flex flex-col items-center justify-center sticky top-6">
+                        <div className="">
                             <div className="w-[500px] h-[500px] mb-6">
                                 <img
-                                    src="/src/assets/happy.PNG"
+                                    src="/src/assets/HipposHappy.gif"
                                     alt="Happy Hippo"
-                                    className="w-[500px] h-[500px] object-contain"
+                                    className="w-[700px] h-[700px] object-contain"
                                 />
                             </div>
                         </div>
@@ -31,10 +31,12 @@ export default function Dashboard() {
                     {/* Right Side - Dashboard Content */}
                     <div className="lg:col-span-3 space-y-6">
                         {/* Vitals Bar Row */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                            <div className="md:col-span-2">
+                                <VitalCard icon="⚕️" title="Health" value={<PetHappinessBar />} />
+                            </div>
                             <VitalCard icon="🍽️" title="Hunger" value={<Countdown />} />
-                            <VitalCard icon="⚕️" title="Health" value={<PetHappinessBar />} />
-                            <VitalCard icon="💰" title="Growth" value="0" />
+                            <VitalCard icon="💰" title="Fed Value" value="0" />
                         </div>
 
                         {/* Feed Now Section */}
@@ -57,7 +59,7 @@ export default function Dashboard() {
                                 <div className="text-center py-6">
                                     <p className="text-gray-500 mb-4">No active feeds</p>
                                     <Link
-                                        to="/setup/feed"
+                                        to="/dca/setup"
                                         className="inline-block bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm"
                                     >
                                         Create one now
@@ -146,7 +148,7 @@ function FeedNowSection({ navigate }: { navigate: (path: string) => void }) {
     ];
 
     return (
-        <Card className="bg-gradient-to-br from-green-50 to-emerald-50 border-green-200">
+        <Card className="bg-[#effdf4] border-green-200">
             <CardHeader>
                 <CardTitle className="flex items-center justify-between text-green-700">
                     <div className="flex items-center gap-3">🍽️ Feed Now</div>
@@ -283,7 +285,7 @@ function VitalCard({
 
 function Countdown() {
     return (
-        <span className="font-mono text-emerald-600">
+        <span className="font-mono text-emerald-600 text-sm">
             Next snack in 00:00:00
         </span>
     );
