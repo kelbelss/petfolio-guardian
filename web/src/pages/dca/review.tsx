@@ -34,28 +34,23 @@ export default function DcaReview() {
         isFetching: quoteLoading,
         isError: quoteError,
     } = useQuote(
-        draft.srcToken || '',
-        draft.dstToken || '',
-        amountWei
+        draft.srcToken,
+        draft.dstToken,
+        amountWei,
+        {
+            enabled: Boolean(
+                draft.srcToken &&
+                draft.dstToken &&
+                amountWei !== '0' &&
+                draft.srcToken !== draft.dstToken
+            ),
+        }
     );
 
     // Debug logging
     useEffect(() => {
         console.log('🔁 DCA Review — quote hook state:', { quoteLoading, quoteError, quoteData });
-        console.log('🔍 DCA Review — quote params:', {
-            srcToken: draft.srcToken || '',
-            dstToken: draft.dstToken || '',
-            amountWei,
-            chunkIn: draft.chunkIn,
-            hasValidParams: Boolean(
-                draft.srcToken &&
-                draft.dstToken &&
-                amountWei !== '0' &&
-                draft.srcToken !== draft.dstToken
-            )
-        });
-        console.log('📋 DCA Review — full draft:', draft);
-    }, [quoteLoading, quoteError, quoteData, draft.srcToken, draft.dstToken, amountWei, draft]);
+    }, [quoteLoading, quoteError, quoteData]);
 
     // Read toTokenAmount from normalized response
     const rawAmount = quoteData?.toTokenAmount;
@@ -67,7 +62,7 @@ export default function DcaReview() {
     if (quoteLoading) {
         return <div className="p-6 text-center">Loading price quote…</div>;
     }
-    if (quoteError || !quoteData) {
+    if (quoteError || !rawAmount) {
         return (
             <div className="p-6 text-center text-red-600">
                 Error fetching quote. Please try again.

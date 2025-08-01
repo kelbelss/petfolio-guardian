@@ -1,5 +1,5 @@
 // src/lib/permit2.ts
-import { encodeFunctionData, getAddress } from 'viem';
+import { encodeFunctionData } from 'viem';
 import type { PublicClient, WalletClient } from 'viem';
 import Permit2ABI from '@/abis/Permit2.json';
 import { SignatureTransfer } from '@uniswap/permit2-sdk';
@@ -7,9 +7,8 @@ import { CONTRACT_ADDRESSES, BASE_NETWORK } from '@/config/base';
 
 /** returns the next free nonce word (we'll just use bitmap word 0) */
 export async function getPermit2Nonce(publicClient: PublicClient, owner: `0x${string}`) {
-  const permit2 = getAddress(CONTRACT_ADDRESSES.PERMIT2);
   const bitmap = await publicClient.readContract({
-    address: permit2,
+    address: CONTRACT_ADDRESSES.PERMIT2,
     abi: Permit2ABI,
     functionName: 'nonceBitmap',
     args: [owner, 0n],
@@ -31,32 +30,19 @@ export async function buildPermit2Tx(
   amountWei    : string,              // decimal string
   deadlineSec  = 60 * 60              // 1 h from now
 ) {
-  console.log('🔍 buildPermit2Tx params:', { owner, token, spender, amountWei });
-  
-  // Validate and checksum all addresses
-  const validOwner = getAddress(owner);
-  const validToken = getAddress(token);
-  const validSpender = getAddress(spender);
-  
-  console.log('🔍 buildPermit2Tx checksummed:', { validOwner, validToken, validSpender });
-  
   /* 1 — fetch nonce */
-  const nonce = await getPermit2Nonce(publicClient, validOwner);
+  const nonce = await getPermit2Nonce(publicClient, owner);
 
   /* 2 — describe permit & build EIP-712 struct */
   const deadline = Math.floor(Date.now() / 1000) + deadlineSec;
   const permit = {
-    permitted : { token: validToken, amount: amountWei },
-    spender: validSpender,
+    permitted : { token, amount: amountWei },
+    spender,
     nonce,
     deadline
   };
-  
-  // Ensure addresses are properly checksummed
-  const permit2 = getAddress(CONTRACT_ADDRESSES.PERMIT2);
-  
   const { domain, types, values } = SignatureTransfer.getPermitData(
-    permit, permit2, BASE_NETWORK.id
+    permit, CONTRACT_ADDRESSES.PERMIT2, BASE_NETWORK.id
   );
 
   /* 3 — sign */
@@ -80,5 +66,5 @@ export async function buildPermit2Tx(
     args: [ permit, signature ]
   });
 
-  return { to: permit2, data };
+  return { to: CONTRACT_ADDRESSES.PERMIT2, data };
 } 

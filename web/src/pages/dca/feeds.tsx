@@ -41,48 +41,67 @@ function FeedCard({
     const timeUntil = feed.nextFillTime - now
 
     return (
-        <Card className="mb-4">
-            <CardHeader className="flex justify-between items-center pb-0">
-                <div>
-                    <CardTitle className="text-lg">
-                        Feed • <span className="font-mono">{formatAddress(feed.orderHash)}</span>
+        <Card className="bg-white border-green-200 shadow-sm hover:shadow-lg transition-all duration-200">
+            <CardHeader className="pb-4">
+                <div className="flex justify-between items-start mb-3">
+                    <CardTitle className="text-lg text-emerald-700">
+                        🍽️ DCA Feed
                     </CardTitle>
-                    <p className="text-sm text-gray-500">
-                        Created {formatDate(feed.createdAt)}
-                    </p>
+                    <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 text-xs">
+                        {formatIntervalFull(feed.period)}
+                    </Badge>
                 </div>
-                <Badge variant="outline">{formatIntervalFull(feed.period)} interval</Badge>
+                <p className="text-sm text-gray-500">
+                    Created {formatDate(feed.createdAt)}
+                </p>
             </CardHeader>
 
-            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-                <div>
-                    <h4 className="font-semibold">From</h4>
-                    <p className="font-mono">{formatAddress(feed.srcToken)}</p>
+            <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                    <div>
+                        <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">From</h4>
+                        <p className="font-mono text-sm bg-gray-50 px-2 py-1 rounded text-gray-700 truncate">
+                            {formatAddress(feed.srcToken)}
+                        </p>
+                    </div>
+                    <div>
+                        <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">To</h4>
+                        <p className="font-mono text-sm bg-gray-50 px-2 py-1 rounded text-gray-700 truncate">
+                            {formatAddress(feed.dstToken)}
+                        </p>
+                    </div>
                 </div>
-                <div>
-                    <h4 className="font-semibold">To</h4>
-                    <p className="font-mono">{formatAddress(feed.dstToken)}</p>
-                </div>
-                <div>
-                    <h4 className="font-semibold">Amount</h4>
-                    <p>{feed.chunkSize}</p>
-                </div>
-                <div>
-                    <h4 className="font-semibold">Next fill</h4>
-                    <p>{formatDate(feed.nextFillTime)}</p>
-                    <Badge className="mt-1">{formatIntervalFull(timeUntil)}</Badge>
+
+                <div className="grid grid-cols-2 gap-4">
+                    <div>
+                        <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Amount</h4>
+                        <p className="text-lg font-semibold text-emerald-600">{feed.chunkSize}</p>
+                    </div>
+                    <div>
+                        <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Next Fill</h4>
+                        <p className="text-sm text-gray-700 mb-1">{formatDate(feed.nextFillTime)}</p>
+                        <Badge className="bg-blue-100 text-blue-700 border-blue-200 text-xs">
+                            {formatIntervalFull(timeUntil)}
+                        </Badge>
+                    </div>
                 </div>
             </CardContent>
 
-            <CardFooter className="flex justify-end">
-                <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => onCancel(feed)}
-                    disabled={isCancelling}
-                >
-                    {isCancelling ? 'Cancelling…' : 'Cancel Feed'}
-                </Button>
+            <CardFooter className="pt-4 border-t border-gray-100">
+                <div className="w-full flex justify-between items-center">
+                    <p className="text-xs text-gray-400 font-mono">
+                        {formatAddress(feed.orderHash)}
+                    </p>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => onCancel(feed)}
+                        disabled={isCancelling}
+                        className="border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300"
+                    >
+                        {isCancelling ? '⏳' : '❌'} Cancel
+                    </Button>
+                </div>
             </CardFooter>
         </Card>
     )
@@ -158,25 +177,46 @@ export default function MyFeeds() {
 
     if (feeds.length === 0) {
         return (
-            <div className="max-w-4xl mx-auto p-6 text-center">
-                <h2 className="text-3xl font-bold mb-6">My Feeds</h2>
-                <p className="text-gray-500 mb-4">No active feeds. Create one above!</p>
-                <Button onClick={() => navigate('/dca/setup')}>Create Your First Feed</Button>
+            <div className="w-full bg-gradient-to-br from-green-50 to-emerald-50 min-h-screen">
+                <div className="max-w-6xl mx-auto p-8 text-center">
+                    <div className="bg-white rounded-2xl p-12 border border-green-200 shadow-lg max-w-2xl mx-auto">
+                        <h2 className="text-4xl font-bold mb-4 text-emerald-700">My Feeds</h2>
+                        <p className="text-gray-600 mb-6 text-lg">No active feeds yet. Start your first DCA strategy!</p>
+                        <Button
+                            onClick={() => navigate('/dca/setup')}
+                            className="bg-emerald-500 hover:bg-emerald-600 text-white px-8 py-3 text-lg"
+                        >
+                            Create Your First Feed
+                        </Button>
+                    </div>
+                </div>
             </div>
         )
     }
 
     return (
-        <div className="max-w-4xl mx-auto p-6">
-            <h2 className="text-3xl font-bold mb-6">My Feeds</h2>
-            {feeds.map(feed => (
-                <FeedCard
-                    key={feed.orderHash}
-                    feed={feed}
-                    onCancel={handleCancelOnChain}
-                    isCancelling={cancelling}
-                />
-            ))}
+        <div className="w-full bg-gradient-to-br from-green-50 to-emerald-50 min-h-screen">
+            <div className="max-w-6xl mx-auto p-8">
+                <div className="mb-8">
+                    <h2 className="text-4xl font-bold text-emerald-700 mb-2">My Feeds</h2>
+                    <p className="text-gray-600 text-lg">Manage your active DCA strategies</p>
+                    <div className="mt-4 flex items-center gap-4">
+                        <div className="bg-emerald-100 text-emerald-700 px-4 py-2 rounded-lg">
+                            <span className="font-semibold">{feeds.length}</span> active feeds
+                        </div>
+                    </div>
+                </div>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {feeds.map(feed => (
+                        <FeedCard
+                            key={feed.orderHash}
+                            feed={feed}
+                            onCancel={handleCancelOnChain}
+                            isCancelling={cancelling}
+                        />
+                    ))}
+                </div>
+            </div>
         </div>
     )
 }
