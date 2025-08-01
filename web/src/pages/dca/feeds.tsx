@@ -19,6 +19,7 @@ interface OrderMeta {
     period: number
     createdAt: number
     nextFillTime: number
+    endDate?: string
 }
 
 function formatIntervalFull(seconds: number): string {
@@ -85,6 +86,24 @@ function FeedCard({
                         </Badge>
                     </div>
                 </div>
+
+                {feed.endDate && (
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">End Date</h4>
+                            <p className="text-sm text-gray-700">{formatDate(new Date(feed.endDate).getTime())}</p>
+                        </div>
+                        <div>
+                            <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Status</h4>
+                            <Badge className={`text-xs ${new Date(feed.endDate).getTime() > Date.now()
+                                ? 'bg-green-100 text-green-700 border-green-200'
+                                : 'bg-red-100 text-red-700 border-red-200'
+                                }`}>
+                                {new Date(feed.endDate).getTime() > Date.now() ? 'Active' : 'Ended'}
+                            </Badge>
+                        </div>
+                    </div>
+                )}
             </CardContent>
 
             <CardFooter className="pt-4 border-t border-gray-100">
@@ -124,7 +143,12 @@ export default function MyFeeds() {
             const parsed = JSON.parse(raw)
             // allow either a single object or an array
             const list = Array.isArray(parsed) ? parsed : [parsed]
-            setFeeds(list)
+            // Ensure all feeds have the endDate field for backward compatibility
+            const normalizedList = list.map(feed => ({
+                ...feed,
+                endDate: feed.endDate || undefined
+            }))
+            setFeeds(normalizedList)
         } catch {
             console.error('Failed to parse orderMeta from localStorage')
         }

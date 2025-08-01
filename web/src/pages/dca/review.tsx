@@ -152,6 +152,7 @@ export default function DcaReview() {
                         period: draft.interval,
                         createdAt: Date.now(),
                         nextFillTime: Date.now() + draft.interval * 1000,
+                        endDate: draft.endDate,
                     })
                 );
 

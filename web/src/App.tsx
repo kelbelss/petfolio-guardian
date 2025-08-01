@@ -20,50 +20,41 @@ export default function App() {
   return (
     <Web3Providers>
       <header className="flex justify-between items-center p-4 w-full bg-white border-b border-gray-200">
-        <Link to="/" className="text-lg font-semibold text-emerald-600">🦛 Petfolio Guardian</Link>
-        <nav className="flex gap-3">
-          <Link to="/">
-            <Button variant="outline" className="text-gray-700">
-              Dashboard
-            </Button>
+        <Link to="/" className="flex items-center gap-3 text-2xl font-bold text-emerald-600">
+          <img src="/src/assets/faviconpet.png" alt="Petfolio Guardian" className="w-8 h-8" />
+          Petfolio Guardian
+        </Link>
+        <nav className="flex gap-6">
+          <Link to="/" className="text-emerald-600 hover:text-emerald-700 text-lg font-medium">
+            Dashboard
           </Link>
-          <Link to="/market-analysis">
-            <Button variant="outline" className="text-gray-700">
-              Market Analysis
-            </Button>
+          <Link to="/market-analysis" className="text-emerald-600 hover:text-emerald-700 text-lg font-medium">
+            Market Analysis
           </Link>
-          <Link to="/dca/setup">
-            <Button variant="outline" className="text-gray-700">
-              DCA Setup
-            </Button>
+          <Link to="/dca/setup" className="text-emerald-600 hover:text-emerald-700 text-lg font-medium">
+            DCA Setup
           </Link>
-          <Link to="/dca/feeds">
-            <Button variant="outline" className="text-gray-700">
-              My Feeds
-            </Button>
+          <Link to="/dca/feeds" className="text-emerald-600 hover:text-emerald-700 text-lg font-medium">
+            My Feeds
           </Link>
-          <Link to="/playground">
-            <Button variant="outline" className="text-gray-700">
-              Playground
-            </Button>
+          <Link to="/how-it-works" className="text-emerald-600 hover:text-emerald-700 text-lg font-medium">
+            How It Works
           </Link>
-          <Link to="/swap">
-            <Button variant="outline" className="text-gray-700">
-              Swap
-            </Button>
+          <Link to="/playground" className="text-emerald-600 hover:text-emerald-700 text-lg font-medium">
+            Playground
           </Link>
-          <Link to="/how-it-works">
-            <Button variant="outline" className="text-gray-700">
-              How It Works
-            </Button>
+          <Link to="/swap" className="text-emerald-600 hover:text-emerald-700 text-lg font-medium">
+            Swap
           </Link>
         </nav>
         <div className="flex items-center gap-4">
           <GasBadge />
           <WalletSummary />
-          <Button className={emeraldColors.button}>
-            Start New DCA
-          </Button>
+          <Link to="/dca/setup">
+            <Button className={emeraldColors.button}>
+              Start New DCA
+            </Button>
+          </Link>
           <ConnectButton />
         </div>
       </header>
