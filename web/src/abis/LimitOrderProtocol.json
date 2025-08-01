@@ -1,0 +1,26 @@
+[
+  {
+    "inputs": [
+      { "internalType": "bytes", "name": "order", "type": "bytes" },
+      { "internalType": "bytes", "name": "signature", "type": "bytes" },
+      { "internalType": "bytes", "name": "interaction", "type": "bytes" }
+    ],
+    "name": "fillOrderTo",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "filledMakingAmount",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "DOMAIN_SEPARATOR",
+    "outputs": [{ "internalType": "bytes32", "name": "", "type": "bytes32" }],
+    "stateMutability": "view",
+    "type": "function"
+  }
+]

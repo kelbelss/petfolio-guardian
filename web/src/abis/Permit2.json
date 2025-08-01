@@ -1,19 +1,31 @@
 [
   {
-    "inputs": [{ "name": "permit2Data", "type": "bytes" }],
-    "name": "permitTransferFrom",
-    "outputs": [],
-    "stateMutability": "nonpayable",
+    "inputs": [
+      { "internalType": "address", "name": "owner", "type": "address" },
+      { "internalType": "uint256", "name": "wordPos", "type": "uint256" }
+    ],
+    "name": "nonceBitmap",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
     "type": "function"
   },
+
   {
     "inputs": [
-      { "name": "token", "type": "address" },
-      { "name": "from", "type": "address" },
-      { "name": "to", "type": "address" },
-      { "name": "amount", "type": "uint256" }
+      {
+        "components": [
+          { "internalType": "address", "name": "token", "type": "address" },
+          { "internalType": "uint160", "name": "amount", "type": "uint160" }
+        ],
+        "internalType": "struct TokenPermissions",
+        "name": "permitted",
+        "type": "tuple"
+      },
+      { "internalType": "address", "name": "spender", "type": "address" },
+      { "internalType": "uint256", "name": "nonce", "type": "uint256" },
+      { "internalType": "uint256", "name": "deadline", "type": "uint256" }
     ],
-    "name": "transferFrom",
+    "name": "permitTransferFrom",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
