@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useRemaining } from '@/lib/hooks/useLimitOrder';
 
 export interface OrderMeta {
   orderHash: string;
@@ -8,11 +9,13 @@ export interface OrderMeta {
   period: number;
   createdAt: number;
   nextFillTime: number;
+  totalCycles: number;
 }
 
 export function usePetState(orderMeta: OrderMeta | null) {
   const [hunger, setHunger] = useState(100); // 100 = full, 0 = starving
   const [timeUntilNextFeed, setTimeUntilNextFeed] = useState<number | null>(null);
+  const { data: remainingAmt } = useRemaining(orderMeta?.orderHash as `0x${string}`);
 
   useEffect(() => {
     if (!orderMeta) {
@@ -23,15 +26,26 @@ export function usePetState(orderMeta: OrderMeta | null) {
 
     const updatePetState = () => {
       const now = Date.now();
-      const timeSinceLastFeed = now - orderMeta.createdAt;
-      const periodsElapsed = Math.floor(timeSinceLastFeed / (orderMeta.period * 1000));
       
-      // Calculate hunger based on time since last feed
-      const hungerDecrease = periodsElapsed * 10; // 10% per period
-      const newHunger = Math.max(0, 100 - hungerDecrease);
-      setHunger(newHunger);
+      // Calculate hunger based on real on-chain progress
+      if (remainingAmt !== undefined && orderMeta) {
+        const filled = orderMeta.chunkSize * orderMeta.totalCycles - Number(remainingAmt) / 1e18;
+        const totalNeeded = orderMeta.chunkSize * orderMeta.totalCycles;
+        const progressPercent = (filled / totalNeeded) * 100;
+        const newHunger = Math.max(0, 100 - progressPercent);
+        setHunger(newHunger);
+      } else {
+        // Fallback to time-based calculation if no on-chain data
+        const timeSinceLastFeed = now - orderMeta.createdAt;
+        const periodsElapsed = Math.floor(timeSinceLastFeed / (orderMeta.period * 1000));
+        const hungerDecrease = periodsElapsed * 10; // 10% per period
+        const newHunger = Math.max(0, 100 - hungerDecrease);
+        setHunger(newHunger);
+      }
 
       // Calculate time until next feed
+      const timeSinceLastFeed = now - orderMeta.createdAt;
+      const periodsElapsed = Math.floor(timeSinceLastFeed / (orderMeta.period * 1000));
       const nextFeedTime = orderMeta.createdAt + (periodsElapsed + 1) * orderMeta.period * 1000;
       const timeUntilNext = Math.max(0, nextFeedTime - now);
       setTimeUntilNextFeed(timeUntilNext);
