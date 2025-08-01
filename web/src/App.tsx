@@ -1,89 +1,52 @@
-import { Routes, Route, Navigate, Link } from 'react-router-dom';
+import { Routes, Route, Link, NavLink } from 'react-router-dom';
 import { Web3Providers } from '@/lib/wagmi';
+import Dashboard from '@/pages/dashboard';
+import FeedNow from '@/pages/feed-now';
 import ConnectButton from '@/components/ConnectButton';
-import { Button } from '@/components/ui/button';
-import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Toaster } from '@/components/ui/toaster';
-import { CacheDebug } from '@/components/ui/cache-debug';
-import FeedWizard from './pages/dca/setup';
-import ReviewFeed from './pages/dca/review';
-import Confirmation from './pages/dca/confirmation';
-import MyFeeds from './pages/dca/feeds';
-import Dashboard from './pages/dashboard';
-import MarketAnalysis from './pages/market-analysis';
-import HowItWorks from './pages/how-it-works';
-import ApiTestPage from './pages/api-test';
-import FeedNowPage from './pages/feed-now';
-
-
-
+import DcaSetup from '@/pages/dca/setup';
+import DcaReview from '@/pages/dca/review';
+import MyFeeds from '@/pages/dca/feeds';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
+import ApiPlayground from '@/pages/api-playground';
+import SwapPlayground from '@/pages/swap-playground';
+import GasBadge from '@/components/GasBadge';
+import WalletSummary from '@/components/WalletSummary';
 
 export default function App() {
   return (
     <Web3Providers>
-      <div className="min-h-screen flex flex-col bg-green-50 text-gray-800">
-        <header className="sticky top-0 z-50 flex items-center justify-between px-6 py-4 bg-white/80 backdrop-blur-sm border-b border-green-200 shadow-sm">
-          <Link to="/" className="text-xl font-bold text-green-600">
-            🐾 Petfolio Guardian
-          </Link>
-          <div className="flex items-center gap-4">
-            <Link to="/">
-              <Button variant="outline" className="text-gray-700">
-                Dashboard
-              </Button>
-            </Link>
-            <Link to="/market-analysis">
-              <Button variant="outline" className="text-gray-700">
-                Market Analysis
-              </Button>
-            </Link>
-            <Link to="/dca/feeds">
-              <Button variant="outline" className="text-gray-700">
-                My Feeds
-              </Button>
-            </Link>
-            <Link to="/how-it-works">
-              <Button variant="outline" className="text-gray-700">
-                How It Works
-              </Button>
-            </Link>
-            <Link to="/api-test">
-              <Button variant="outline" className="text-gray-700">
-                API Test
-              </Button>
-            </Link>
+      <header className="flex justify-between items-center p-4 max-w-5xl mx-auto bg-gradient-to-r from-green-50 to-blue-50 border-b border-green-200">
+        <Link to="/" className="text-lg font-semibold text-emerald-600">🦛 Petfolio Guardian</Link>
+        <nav className="flex gap-4 text-sm">
+          <NavLink to="/" className={({ isActive }) => isActive ? 'text-emerald-600 font-semibold' : 'text-gray-600 hover:text-emerald-600'}>Dashboard</NavLink>
+          <NavLink to="/feed" className={({ isActive }) => isActive ? 'text-emerald-600 font-semibold' : 'text-gray-600 hover:text-emerald-600'}>Feed Now</NavLink>
+          <NavLink to="/dca/setup" className={({ isActive }) => isActive ? 'text-emerald-600 font-semibold' : 'text-gray-600 hover:text-emerald-600'}>DCA Setup</NavLink>
+          <NavLink to="/dca/feeds" className={({ isActive }) => isActive ? 'text-emerald-600 font-semibold' : 'text-gray-600 hover:text-emerald-600'}>My Feeds</NavLink>
+          <NavLink to="/playground" className={({ isActive }) => isActive ? 'text-emerald-600 font-semibold' : 'text-gray-600 hover:text-emerald-600'}>Playground</NavLink>
+          <NavLink to="/swap" className={({ isActive }) => isActive ? 'text-emerald-600 font-semibold' : 'text-gray-600 hover:text-emerald-600'}>Swap</NavLink>
+        </nav>
+        <div className="flex items-center gap-4">
+          <GasBadge />
+          <WalletSummary />
+          <ConnectButton />
+        </div>
+      </header>
 
-            <Link to="/setup/feed">
-              <Button className="bg-emerald-400 hover:bg-emerald-500 text-white shadow-sm hover:shadow-md transition-all">
-                Start New DCA
-              </Button>
-            </Link>
-            <ConnectButton />
-          </div>
-        </header>
+      <ErrorBoundary>
+        <Routes>
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/feed" element={<FeedNow />} />
+          <Route path="/dca/setup" element={<DcaSetup />} />
+          <Route path="/dca/review" element={<DcaReview />} />
+          <Route path="/dca/feeds" element={<MyFeeds />} />
+          <Route path="/playground" element={<ApiPlayground />} />
+          <Route path="/swap" element={<SwapPlayground />} />
+          <Route path="*" element={<div className="max-w-3xl mx-auto p-6">Not Found</div>} />
+        </Routes>
+      </ErrorBoundary>
 
-        <main className="flex-1 w-full">
-          <ErrorBoundary>
-            <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/market-analysis" element={<MarketAnalysis />} />
-
-
-
-              <Route path="/setup/feed" element={<FeedWizard />} />
-              <Route path="/setup/feed/review" element={<ReviewFeed />} />
-              <Route path="/setup/feed/confirmation" element={<Confirmation />} />
-              <Route path="/dca/feeds" element={<MyFeeds />} />
-              <Route path="/how-it-works" element={<HowItWorks />} />
-              <Route path="/api-test" element={<ApiTestPage />} />
-              <Route path="/feed-now" element={<FeedNowPage />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </ErrorBoundary>
-        </main>
-      </div>
       <Toaster />
-      <CacheDebug />
     </Web3Providers>
   );
 }

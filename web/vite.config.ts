@@ -5,7 +5,7 @@ import { nodePolyfills } from 'vite-plugin-node-polyfills';
 export default defineConfig({
   plugins: [react(), nodePolyfills()],
   server: {
-    // No longer need local proxy since we're using Vercel proxy
+    // Vercel proxy handles all 1inch requests
   },
   resolve: {
     alias: {
