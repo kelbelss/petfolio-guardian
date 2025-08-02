@@ -1,23 +1,15 @@
 {
-  "name": "bot",
-  "version": "1.0.0",
-  "type": "module",
-  "ts-node": {
-    "esm": true,
-    "experimentalSpecifierResolution": "node"
-  },
   "scripts": {
-    "compile": "tsc",
-    "build:blob": "npm run compile && node dist/buildInteraction.js"
+    "build:blob": "npm run compile && node dist/buildInteraction.js",
+    "simulate": "ts-node bot/simulateBot.ts"
+    "bot": "ts-node bot.ts"
   },
   "dependencies": {
-    "@1inch/limit-order-sdk": "^4.9.5-rc.0",
+    "@supabase/supabase-js": "^2.53.0",
     "dotenv": "^17.2.1",
-    "ethers": "^6.15.0",
-    "undici": "^5.29.0"
+    "viem": "^2.33.2"
   },
   "devDependencies": {
-    "@types/node": "^24.1.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.8.3"
   }
