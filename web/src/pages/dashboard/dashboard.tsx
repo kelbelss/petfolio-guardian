@@ -3,14 +3,86 @@ import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { hippoGame } from '@/lib/hippoGame';
-
+import { usePetState } from '@/hooks/usePetState';
 import { PriceFeedWidget } from '@/pages/dashboard/price-feed-widget';
+import HealthTracking from '@/components/HealthTracking';
+import { useAccount, useWalletClient } from 'wagmi';
+import { useToast } from '@/components/ui/use-toast';
+import { useUser, useUpdateUser, useCreateUser, useUserFeeds } from '@/hooks/useSupabase';
+import PortfolioSection from '@/components/PortfolioSection';
 
 export default function Dashboard() {
     const navigate = useNavigate();
+    const { address } = useAccount();
+    const { toast } = useToast();
+    const { data: userData, isLoading: userLoading, error: userError } = useUser(address || '');
+    const { mutateAsync: updateUser } = useUpdateUser();
+    const { mutateAsync: createUser } = useCreateUser();
+    const { data: feedsData } = useUserFeeds(address || '');
+    const user = userData?.data;
     const [hippoName, setHippoName] = React.useState<string>('');
+    const {
+        getHippoImage,
+        clearPetState
+    } = usePetState();
 
+    // Update local state when user data changes or wallet disconnects
+    React.useEffect(() => {
+        if (!address) {
+            // Clear everything when wallet disconnects
+            setHippoName('');
+            clearPetState();
+            return;
+        }
+
+        if (user?.hippo_name) {
+            setHippoName(user.hippo_name);
+        } else {
+            setHippoName('');
+        }
+    }, [user?.hippo_name, address]);
+
+    // Create user in Supabase if they don't exist
+    React.useEffect(() => {
+        if (address && !userLoading && !user && !userError) {
+            const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+            createUser({
+                walletAddress: address,
+                timezone: userTimezone
+            }).catch(error => {
+                console.error('Failed to create user:', error);
+            });
+        }
+    }, [address, userLoading, user, userError, createUser]);
+
+    // Log errors for debugging
+    React.useEffect(() => {
+        if (userError) {
+            console.error('User data error:', userError);
+        }
+    }, [userError]);
+
+    const handleHippoNameChange = async (newName: string) => {
+        if (!address) return;
+
+        try {
+            setHippoName(newName);
+            await updateUser({ walletAddress: address, updates: { hippo_name: newName } });
+            toast({
+                title: "Hippo name saved!",
+                description: `${newName} will remember their name across all your devices.`,
+            });
+        } catch (error) {
+            console.error('Failed to save hippo name:', error);
+            // Revert the name change if save failed
+            setHippoName(user?.hippo_name || '');
+            toast({
+                title: "Failed to save name",
+                description: "Please check your connection and try again.",
+                variant: "destructive",
+            });
+        }
+    };
 
     return (
         <div className="w-full bg-[#effdf4] min-h-screen">
@@ -40,7 +112,7 @@ export default function Dashboard() {
                                             className="w-64 px-4 py-2 border-2 border-emerald-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-center bg-white shadow-sm"
                                             onKeyPress={(e) => {
                                                 if (e.key === 'Enter' && e.currentTarget.value.trim()) {
-                                                    setHippoName(e.currentTarget.value.trim());
+                                                    handleHippoNameChange(e.currentTarget.value.trim());
                                                     e.currentTarget.value = '';
                                                 }
                                             }}
@@ -52,8 +124,8 @@ export default function Dashboard() {
 
                             <div className="w-[500px] h-[500px] mb-6">
                                 <img
-                                    src="/src/assets/HipposHappy.gif"
-                                    alt="Happy Hippo"
+                                    src={getHippoImage()}
+                                    alt="Hippo"
                                     className="w-[700px] h-[700px] object-contain"
                                 />
                             </div>
@@ -75,12 +147,8 @@ export default function Dashboard() {
                             <div className="md:col-span-2">
                                 <VitalCard icon="⚕️" title="Health" value={<PetHappinessBar />} />
                             </div>
-                            <VitalCard icon="🍽️" title="Hunger" value={<Countdown />} />
-                            <VitalCard icon="💰" title="Total Fed" value={
-                                <div className="pt-1">
-                                    <span className="font-mono text-emerald-600 text-xs">0</span>
-                                </div>
-                            } />
+                            <VitalCard icon="🍽️" title="Hunger" value={<Countdown feedsData={feedsData} />} />
+                            <VitalCard icon="⏰" title="Last feed" value={<LastFeedTime feedsData={feedsData} userTimezone={user?.timezone} />} />
                         </div>
 
                         {/* Feed Now Section */}
@@ -113,17 +181,17 @@ export default function Dashboard() {
                         </Card>
 
                         {/* Portfolio Section */}
-                        <PortfolioSection navigate={navigate} />
+                        <PortfolioSection address={address} user={user} />
 
                         {/* Price Feed Widget */}
                         <div className="w-full">
                             <PriceFeedWidget />
                         </div>
 
-
-
-
-
+                        {/* Health Tracking */}
+                        <div className="w-full">
+                            <HealthTracking />
+                        </div>
                     </div>
                 </div>
             </div>
@@ -132,7 +200,24 @@ export default function Dashboard() {
 }
 
 function FeedNowSection({ navigate }: { navigate: (path: string) => void }) {
-    const [selectedOption, setSelectedOption] = React.useState<'regular' | 'fusion' | 'fusion-plus'>('regular');
+    const [selectedOption, setSelectedOption] = React.useState<'regular' | 'recurring' | 'fusion' | 'fusion-plus'>('regular');
+    const { address } = useAccount();
+    const { data: walletClient } = useWalletClient();
+    const { toast } = useToast();
+
+    // Handle Feed Now button based on selection
+    const handleFeedNow = async () => {
+        if (!address || !walletClient) {
+            toast({ title: 'Wallet not connected', variant: 'destructive' });
+            return;
+        }
+
+        if (selectedOption === 'regular') {
+            navigate('/regular-swap');
+        } else if (selectedOption === 'recurring') {
+            navigate('/dca/setup');
+        }
+    };
 
     // STATIC DEMO SWAP OPTIONS
     const swapOptions = [
@@ -144,6 +229,17 @@ function FeedNowSection({ navigate }: { navigate: (path: string) => void }) {
             estimatedTime: '~30 seconds',
             estimatedGas: '~150,000 gas',
             explanation: 'Standard swap through 1inch aggregator. Fastest execution with competitive pricing.',
+            price: '0',
+            output: '0'
+        },
+        {
+            id: 'recurring',
+            title: 'Recurring Feeds',
+            description: 'Set up automated DCA strategies',
+            icon: '🔄',
+            estimatedTime: '~5 minutes',
+            estimatedGas: '~200,000 gas',
+            explanation: 'Create recurring DCA feeds to automatically feed your hippo on schedule.',
             price: '0',
             output: '0'
         },
@@ -182,94 +278,92 @@ function FeedNowSection({ navigate }: { navigate: (path: string) => void }) {
                 <div className="space-y-4">
                     <div>
                         <h3 className="text-lg font-semibold text-gray-900 mb-4">Choose Swap Method</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            {swapOptions.map(option => (
-                                <div
-                                    key={option.id}
-                                    className={`
-                                        relative border-2 rounded-xl p-4 cursor-pointer transition-all duration-200
+                        <div className="flex gap-4 overflow-x-auto pb-4">
+                            <div className="flex gap-4" style={{ minWidth: 'max-content' }}>
+                                {swapOptions.map(option => (
+                                    <div
+                                        key={option.id}
+                                        className={`
+                                        relative border-2 rounded-xl p-4 cursor-pointer transition-all duration-200 w-80
                                         ${selectedOption === option.id
-                                            ? 'border-emerald-500 bg-emerald-50 shadow-md'
-                                            : 'border-gray-200 bg-white hover:border-gray-300'}
+                                                ? 'border-emerald-500 bg-emerald-50 shadow-md'
+                                                : 'border-gray-200 bg-white hover:border-gray-300'}
                                     `}
-                                    onClick={() => {
-                                        if (option.id !== 'fusion' && option.id !== 'fusion-plus') {
-                                            setSelectedOption(option.id as typeof selectedOption);
-                                        }
-                                    }}
-                                >
-                                    {/* Coming Soon Banner for Fusion and Fusion+ */}
-                                    {(option.id === 'fusion' || option.id === 'fusion-plus') && (
-                                        <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 z-20">
-                                            <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 text-white px-4 py-1 rounded-full text-xs font-semibold shadow-lg">
-                                                🚀 Coming Soon
+                                        onClick={() => {
+                                            if (option.id === 'regular' || option.id === 'recurring') {
+                                                setSelectedOption(option.id as typeof selectedOption);
+                                            }
+                                        }}
+                                    >
+                                        {/* Coming Soon Banner for Fusion and Fusion+ */}
+                                        {(option.id === 'fusion' || option.id === 'fusion-plus') && (
+                                            <div className="absolute top-4 left-2/3 transform -translate-x-1/2 z-20 pr-10">
+                                                <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 text-white px-3 py-1 rounded-full text-xs font-semibold shadow-lg whitespace-nowrap">
+                                                    🚀 Coming Soon
+                                                </div>
                                             </div>
-                                        </div>
-                                    )}
+                                        )}
 
-                                    {/* radio indicator */}
-                                    <div className="absolute top-3 right-3">
-                                        <div className={`
+                                        {/* radio indicator */}
+                                        <div className="absolute top-3 right-3">
+                                            <div className={`
                                             w-5 h-5 rounded-full border-2 flex items-center justify-center
                                             ${selectedOption === option.id
-                                                ? 'border-emerald-500 bg-emerald-500'
-                                                : 'border-gray-300'}
+                                                    ? 'border-emerald-500 bg-emerald-500'
+                                                    : 'border-gray-300'}
                                         `}>
-                                            {selectedOption === option.id && (
-                                                <div className="w-2 h-2 bg-white rounded-full" />
-                                            )}
+                                                {selectedOption === option.id && (
+                                                    <div className="w-2 h-2 bg-white rounded-full" />
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* icon + title */}
+                                        <div className="flex items-center gap-2 mb-3">
+                                            <span className="text-2xl">{option.icon}</span>
+                                            <h4 className="font-semibold text-gray-900">{option.title}</h4>
+                                        </div>
+
+                                        {/* description */}
+                                        <p className="text-sm text-gray-600 mb-3">{option.description}</p>
+
+                                        {/* estimates */}
+                                        <div className="space-y-1 text-sm mb-3">
+                                            <div className="flex justify-between">
+                                                <span className="text-gray-600">Est. Time:</span>
+                                                <span className="font-medium">{option.estimatedTime}</span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                                <span className="text-gray-600">Est. Gas:</span>
+                                                <span className="font-medium">{option.estimatedGas}</span>
+                                            </div>
+                                        </div>
+
+                                        {/* explanation */}
+                                        <p className="text-xs text-gray-500 leading-relaxed mb-3">
+                                            {option.explanation}
+                                        </p>
+
+                                        {/* DEMO PRICE / OUTPUT */}
+                                        <div className="flex justify-between text-sm font-medium">
+                                            <span>Price:</span>
+                                            <span>{option.price}</span>
+                                        </div>
+                                        <div className="flex justify-between text-sm font-medium">
+                                            <span>Output:</span>
+                                            <span>{option.output}</span>
                                         </div>
                                     </div>
-
-                                    {/* icon + title */}
-                                    <div className="flex items-center gap-2 mb-3">
-                                        <span className="text-2xl">{option.icon}</span>
-                                        <h4 className="font-semibold text-gray-900">{option.title}</h4>
-                                    </div>
-
-                                    {/* description */}
-                                    <p className="text-sm text-gray-600 mb-3">{option.description}</p>
-
-                                    {/* estimates */}
-                                    <div className="space-y-1 text-sm mb-3">
-                                        <div className="flex justify-between">
-                                            <span className="text-gray-600">Est. Time:</span>
-                                            <span className="font-medium">{option.estimatedTime}</span>
-                                        </div>
-                                        <div className="flex justify-between">
-                                            <span className="text-gray-600">Est. Gas:</span>
-                                            <span className="font-medium">{option.estimatedGas}</span>
-                                        </div>
-                                    </div>
-
-                                    {/* explanation */}
-                                    <p className="text-xs text-gray-500 leading-relaxed mb-3">
-                                        {option.explanation}
-                                    </p>
-
-                                    {/* DEMO PRICE / OUTPUT */}
-                                    <div className="flex justify-between text-sm font-medium">
-                                        <span>Price:</span>
-                                        <span>{option.price}</span>
-                                    </div>
-                                    <div className="flex justify-between text-sm font-medium">
-                                        <span>Output:</span>
-                                        <span>{option.output}</span>
-                                    </div>
-                                </div>
-                            ))}
+                                ))}
+                            </div>
                         </div>
                     </div>
                     <div className="flex gap-3 pt-4 border-t border-gray-200">
-                        <Button className="flex-1 bg-emerald-400 hover:bg-emerald-500 text-white shadow-sm hover:shadow-md transition-all">
-                            🍽️ Feed Now
-                        </Button>
                         <Button
-                            variant="outline"
-                            className="flex-1 border-emerald-200 text-emerald-600"
-                            onClick={() => navigate('/dca/setup')}
+                            className="flex-1 bg-emerald-400 hover:bg-emerald-500 text-white shadow-sm hover:shadow-md transition-all"
+                            onClick={handleFeedNow}
                         >
-                            🔄 Recurring Feed
+                            🍽️ Feed Now
                         </Button>
                     </div>
                 </div>
@@ -278,27 +372,7 @@ function FeedNowSection({ navigate }: { navigate: (path: string) => void }) {
     );
 }
 
-function PortfolioSection({ navigate }: { navigate: (path: string) => void }) {
-    return (
-        <Card className="bg-white border-green-200 shadow-sm">
-            <CardHeader>
-                <CardTitle className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        <span className="text-2xl">💰</span>
-                        <span>Portfolio</span>
-                    </div>
-                    <div className="text-right">
-                        <div className="text-sm text-gray-500">Total Value</div>
-                        <div className="text-2xl font-bold text-green-600">$0</div>
-                    </div>
-                </CardTitle>
-            </CardHeader>
-            <CardContent>
-                <div className="text-center py-8 text-gray-500">No assets</div>
-            </CardContent>
-        </Card>
-    );
-}
+
 
 function VitalCard({
     icon,
@@ -320,40 +394,155 @@ function VitalCard({
     );
 }
 
-function Countdown() {
+function Countdown({ feedsData }: { feedsData: any }) {
+    const getNextFeedTime = () => {
+        if (!feedsData?.data || feedsData.data.length === 0) {
+            return 'No recurring feeds set';
+        }
+
+        // Find active recurring feeds (DCA feeds)
+        const activeDCAFeeds = feedsData.data.filter((feed: any) =>
+            feed.feed_type === 'recurring' && feed.status === 'active'
+        );
+
+        if (activeDCAFeeds.length === 0) {
+            return 'No recurring feeds set';
+        }
+
+        // Find the next feed time from all active DCA feeds
+        const now = Date.now();
+        let nextFeedTime = null;
+
+        activeDCAFeeds.forEach((feed: any) => {
+            if (feed.next_fill_time) {
+                const nextTime = new Date(feed.next_fill_time).getTime();
+                if (nextTime > now && (!nextFeedTime || nextTime < nextFeedTime)) {
+                    nextFeedTime = nextTime;
+                }
+            }
+        });
+
+        if (!nextFeedTime) {
+            return 'No scheduled feeds';
+        }
+
+        // Calculate time difference
+        const diff = nextFeedTime - now;
+        const seconds = Math.floor(diff / 1000);
+
+        if (seconds < 60) {
+            return `${seconds} seconds`;
+        } else if (seconds < 3600) {
+            const minutes = Math.floor(seconds / 60);
+            return `${minutes} minute${minutes !== 1 ? 's' : ''}`;
+        } else if (seconds < 86400) {
+            const hours = Math.floor(seconds / 3600);
+            const remainingMinutes = Math.floor((seconds % 3600) / 60);
+            if (remainingMinutes > 0) {
+                return `${hours} hour${hours !== 1 ? 's' : ''} ${remainingMinutes} minute${remainingMinutes !== 1 ? 's' : ''}`;
+            } else {
+                return `${hours} hour${hours !== 1 ? 's' : ''}`;
+            }
+        } else {
+            const days = Math.floor(seconds / 86400);
+            const remainingHours = Math.floor((seconds % 86400) / 3600);
+            if (remainingHours > 0) {
+                return `${days} day${days !== 1 ? 's' : ''} ${remainingHours} hour${remainingHours !== 1 ? 's' : ''}`;
+            } else {
+                return `${days} day${days !== 1 ? 's' : ''}`;
+            }
+        }
+    };
+
     return (
         <div className="pt-1">
             <span className="font-mono text-emerald-600 text-xs">
-                Next snack in 00:00:00
+                Next feed in: {getNextFeedTime()}
             </span>
         </div>
     );
 }
 
 function PetHappinessBar() {
-    const state = hippoGame.getState();
-    const snackPercentage = hippoGame.getSnackPercentage();
+    const { health, healthPercentage } = usePetState();
 
-    // Determine color based on snack level
+    // Determine color based on health level
     let barColor = 'bg-emerald-400'; // Default green
-    if (state.snacks <= 3) {
-        barColor = 'bg-red-500'; // Red for hungry (0-3 snacks)
-    } else if (state.snacks <= 6) {
-        barColor = 'bg-yellow-500'; // Yellow for neutral (4-6 snacks)
+    if (health <= 3) {
+        barColor = 'bg-red-500'; // Red for hungry (0-3 health)
+    } else if (health <= 6) {
+        barColor = 'bg-yellow-500'; // Yellow for neutral (4-6 health)
     }
 
     return (
         <div className="space-y-2">
             <div className="h-4 rounded bg-gray-200 overflow-hidden relative">
-                <div className={`h-full ${barColor} w-[${snackPercentage}%] transition-all duration-300`}></div>
+                <div className={`h-full ${barColor} transition-all duration-300`} style={{ width: `${healthPercentage}%` }}></div>
                 <div className="absolute inset-0 flex items-center justify-between px-2">
-                    <span className="text-xs text-gray-700 font-bold">1</span>
+                    <span className="text-xs text-gray-700 font-bold">0</span>
                     <span className="text-xs text-gray-700 font-bold">10</span>
                 </div>
             </div>
             <div className="text-center">
-                <span className="text-xs font-mono text-gray-600">{state.snacks}/10</span>
+                <span className="text-xs font-mono text-gray-600">{health.toFixed(1)}/10</span>
             </div>
+        </div>
+    );
+}
+
+function LastFeedTime({ feedsData, userTimezone }: { feedsData: any, userTimezone?: string }) {
+    // Get the most recent swap from Supabase
+    const getLastFeedTime = () => {
+        if (!feedsData?.data || feedsData.data.length === 0) {
+            return 'Never fed';
+        }
+
+        // Find the most recent swap (completed feeds)
+        const completedSwaps = feedsData.data.filter((feed: any) =>
+            feed.feed_type === 'swap' && feed.status === 'completed'
+        );
+
+        if (completedSwaps.length === 0) {
+            return 'Never fed';
+        }
+
+        // Sort by created_at and get the most recent
+        const mostRecent = completedSwaps.sort((a: any, b: any) =>
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        )[0];
+
+        const timestamp = new Date(mostRecent.created_at).getTime();
+        const timezone = userTimezone || 'Asia/Dubai';
+
+        // Calculate time difference
+        const now = Date.now();
+        const diff = now - timestamp;
+        const seconds = Math.floor(diff / 1000);
+
+        if (seconds < 60) {
+            return 'Just now';
+        } else if (seconds < 3600) {
+            const minutes = Math.floor(seconds / 60);
+            return `${minutes} minute${minutes !== 1 ? 's' : ''} ago`;
+        } else if (seconds < 86400) {
+            const hours = Math.floor(seconds / 3600);
+            const remainingMinutes = Math.floor((seconds % 3600) / 60);
+            if (remainingMinutes > 0) {
+                return `${hours} hour${hours !== 1 ? 's' : ''} ${remainingMinutes} minute${remainingMinutes !== 1 ? 's' : ''} ago`;
+            } else {
+                return `${hours} hour${hours !== 1 ? 's' : ''} ago`;
+            }
+        } else {
+            const days = Math.floor(seconds / 86400);
+            return `${days} day${days !== 1 ? 's' : ''} ago`;
+        }
+    };
+
+    return (
+        <div className="pt-1">
+            <span className="font-mono text-emerald-600 text-xs">
+                {getLastFeedTime()}
+            </span>
         </div>
     );
 }

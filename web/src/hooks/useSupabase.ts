@@ -97,10 +97,14 @@ export const useCreateUser = () => {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: (walletAddress: string) => supabaseService.createUser(walletAddress),
+    mutationFn: ({ walletAddress, hippoName, timezone }: {
+      walletAddress: string;
+      hippoName?: string;
+      timezone?: string;
+    }) => supabaseService.createUser(walletAddress, hippoName, timezone),
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ 
-        queryKey: ['user', variables] 
+        queryKey: ['user', variables.walletAddress] 
       });
     },
   });
@@ -115,6 +119,40 @@ export const useUpdateUser = () => {
       walletAddress: string; 
       updates: Partial<User> 
     }) => supabaseService.updateUser(walletAddress, updates),
+    onSuccess: (data, variables) => {
+      queryClient.invalidateQueries({ 
+        queryKey: ['user', variables.walletAddress] 
+      });
+    },
+  });
+};
+
+// Hook for adding portfolio tokens
+export const useAddPortfolioToken = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: ({ walletAddress, tokenAddress }: { 
+      walletAddress: string; 
+      tokenAddress: string; 
+    }) => supabaseService.addPortfolioToken(walletAddress, tokenAddress),
+    onSuccess: (data, variables) => {
+      queryClient.invalidateQueries({ 
+        queryKey: ['user', variables.walletAddress] 
+      });
+    },
+  });
+};
+
+// Hook for removing portfolio tokens
+export const useRemovePortfolioToken = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: ({ walletAddress, tokenAddress }: { 
+      walletAddress: string; 
+      tokenAddress: string; 
+    }) => supabaseService.removePortfolioToken(walletAddress, tokenAddress),
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ 
         queryKey: ['user', variables.walletAddress] 

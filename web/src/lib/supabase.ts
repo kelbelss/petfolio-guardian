@@ -15,6 +15,8 @@ export interface User {
   id: string;
   wallet_address: string;
   hippo_name?: string;
+  timezone?: string;
+  portfolio_tokens?: string[]; // Array of token addresses
   created_at: string;
   updated_at: string;
 }
@@ -78,10 +80,14 @@ export class SupabaseService {
   }
 
   // User management
-  async createUser(walletAddress: string, hippoName?: string): Promise<{ data: User | null; error: any }> {
+  async createUser(walletAddress: string, hippoName?: string, timezone?: string): Promise<{ data: User | null; error: any }> {
     const { data, error } = await this.supabase
       .from('users')
-      .insert({ wallet_address: walletAddress, hippo_name: hippoName })
+      .insert({ 
+        wallet_address: walletAddress, 
+        hippo_name: hippoName,
+        timezone: timezone || Intl.DateTimeFormat().resolvedOptions().timeZone
+      })
       .select()
       .single();
 
@@ -169,6 +175,37 @@ export class SupabaseService {
       .single();
 
     return { data, error };
+  }
+
+  // Portfolio token management
+  async addPortfolioToken(walletAddress: string, tokenAddress: string): Promise<{ data: User | null; error: any }> {
+    // Get current user
+    const { data: user, error: getUserError } = await this.getUser(walletAddress);
+    if (getUserError) return { data: null, error: getUserError };
+
+    // Get current portfolio tokens or initialize empty array
+    const currentTokens = user?.portfolio_tokens || [];
+    
+    // Add token if not already present
+    if (!currentTokens.includes(tokenAddress)) {
+      const updatedTokens = [...currentTokens, tokenAddress];
+      return this.updateUser(walletAddress, { portfolio_tokens: updatedTokens });
+    }
+
+    return { data: user, error: null };
+  }
+
+  async removePortfolioToken(walletAddress: string, tokenAddress: string): Promise<{ data: User | null; error: any }> {
+    // Get current user
+    const { data: user, error: getUserError } = await this.getUser(walletAddress);
+    if (getUserError) return { data: null, error: getUserError };
+
+    // Get current portfolio tokens
+    const currentTokens = user?.portfolio_tokens || [];
+    
+    // Remove token
+    const updatedTokens = currentTokens.filter(token => token !== tokenAddress);
+    return this.updateUser(walletAddress, { portfolio_tokens: updatedTokens });
   }
 
   // Bot execution logging
