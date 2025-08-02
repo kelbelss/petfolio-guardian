@@ -8,7 +8,7 @@ import { PriceFeedWidget } from '@/pages/dashboard/price-feed-widget';
 import HealthTracking from '@/components/HealthTracking';
 import { useAccount, useWalletClient } from 'wagmi';
 import { useToast } from '@/components/ui/use-toast';
-import { useUser, useUpdateUser, useCreateUser, useUserFeeds } from '@/hooks/useSupabase';
+import { useUser, useUpdateUser, useCreateUser, useUserFeeds, useHealthRecord } from '@/hooks/useSupabase';
 import type { Feed } from '@/lib/supabase';
 import PortfolioSection from '@/components/PortfolioSection';
 
@@ -144,7 +144,7 @@ export default function Dashboard() {
                         {/* Vitals Bar Row */}
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                             <div className="md:col-span-2">
-                                <VitalCard icon="⚕️" title="Health" value={<PetHappinessBar feedsData={feedsData} />} />
+                                <VitalCard icon="⚕️" title="Health" value={<PetHappinessBar />} />
                             </div>
                             <VitalCard icon="🍽️" title="Hunger" value={<Countdown feedsData={feedsData} />} />
                             <VitalCard icon="⏰" title="Last feed" value={<LastFeedTime feedsData={feedsData} />} />
@@ -439,71 +439,28 @@ function Countdown({ feedsData }: { feedsData: { data: Feed[] | null } | undefin
     );
 }
 
-function PetHappinessBar({ feedsData }: { feedsData: { data: Feed[] | null } | undefined }) {
-    // Calculate health based on real swap data
+function PetHappinessBar() {
+    const { address } = useAccount();
+    const { data: healthRecordData } = useHealthRecord(address || '');
+
+    // Use health data from Supabase (same as HealthTracking component)
     const healthData = React.useMemo(() => {
-        if (!feedsData?.data || feedsData.data.length === 0) {
+        if (!healthRecordData?.data) {
             return {
                 health: 8.0,
                 healthPercentage: 80
             };
         }
 
-        const feeds = feedsData.data;
-        let totalHealth = 8.0; // Starting health
-        let lastFedTime: number | null = null;
-
-        // Process each feed to calculate health
-        feeds.forEach((feed: Feed) => {
-            const createdAt = new Date(feed.created_at).getTime();
-
-            // Feed creation event
-            totalHealth += 0.5;
-            lastFedTime = Math.max(lastFedTime || 0, createdAt);
-
-            // Bot execution events
-            if (feed.bot_execution_count > 0) {
-                totalHealth += feed.bot_execution_count * 0.5;
-                // Approximate execution times
-                for (let i = 0; i < feed.bot_execution_count; i++) {
-                    const executionTime = createdAt + (i * feed.period * 1000);
-                    lastFedTime = Math.max(lastFedTime, executionTime);
-                }
-            }
-
-            // Handle feed status changes
-            if (feed.status === 'completed') {
-                totalHealth += 1.0;
-                lastFedTime = Math.max(lastFedTime, createdAt);
-            } else if (feed.status === 'failed') {
-                totalHealth -= 1.0;
-                lastFedTime = Math.max(lastFedTime, createdAt);
-            }
-        });
-
-        // Apply decay if there's a last fed time
-        if (lastFedTime) {
-            const now = Date.now();
-            const timeSinceLastFed = now - lastFedTime;
-            const decayInterval = 6 * 60 * 60 * 1000; // 6 hours in ms
-            const decayAmount = 0.5; // 0.5 health points per decay cycle
-            const decayCycles = Math.floor(timeSinceLastFed / decayInterval);
-
-            if (decayCycles > 0) {
-                const totalDecay = decayCycles * decayAmount;
-                totalHealth = Math.max(0, totalHealth - totalDecay);
-            }
-        }
-
-        // Cap health between 0 and 10
-        totalHealth = Math.max(0, Math.min(10, totalHealth));
-        const healthPercentage = (totalHealth / 10) * 100;
+        const healthRecord = healthRecordData.data;
+        const health = healthRecord.current_health;
+        const healthPercentage = (health / 10) * 100;
 
         return {
-            health: totalHealth,
+            health,
             healthPercentage
         };
-    }, [feedsData]);
+    }, [healthRecordData]);
 
     // Determine color based on health level
     let barColor = 'bg-emerald-400'; // Default green

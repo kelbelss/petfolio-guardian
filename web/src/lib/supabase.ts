@@ -370,25 +370,31 @@ export class SupabaseService {
           }
         }
 
-        // Status changes
-        if (feed.status === 'completed') {
-          totalHealth += 1.0;
-          lastFedTime = Math.max(lastFedTime, createdAt);
-          healthHistory.push({
-            timestamp: createdAt,
-            healthChange: 1.0,
-            reason: 'Feed completed successfully',
-            details: `${feed.feed_type} feed finished`
-          });
-        } else if (feed.status === 'failed') {
-          totalHealth -= 1.0;
-          lastFedTime = Math.max(lastFedTime, createdAt);
-          healthHistory.push({
-            timestamp: createdAt,
-            healthChange: -1.0,
-            reason: 'Feed failed',
-            details: `${feed.feed_type} feed encountered an error`
-          });
+        // Status changes - only add health for DCA feeds, not instant swaps
+        if (feed.feed_type === 'recurring') {
+          if (feed.status === 'completed') {
+            // Only give completion bonus for DCA feeds that have been executed multiple times
+            // This prevents double-counting the initial creation + completion
+            if (feed.bot_execution_count > 0) {
+              totalHealth += 1.0;
+              lastFedTime = Math.max(lastFedTime, createdAt);
+              healthHistory.push({
+                timestamp: createdAt,
+                healthChange: 1.0,
+                reason: 'DCA feed completed successfully',
+                details: `${feed.feed_type} feed finished`
+              });
+            }
+          } else if (feed.status === 'failed') {
+            totalHealth -= 1.0;
+            lastFedTime = Math.max(lastFedTime, createdAt);
+            healthHistory.push({
+              timestamp: createdAt,
+              healthChange: -1.0,
+              reason: 'DCA feed failed',
+              details: `${feed.feed_type} feed encountered an error`
+            });
+          }
         }
       });
     }
