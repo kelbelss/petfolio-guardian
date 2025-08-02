@@ -1,10 +1,23 @@
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { buildAndSignOrder, fillOrderTx, remaining } from '@/lib/limitOrder';
-import { createWalletClient, custom, maxUint256, http } from 'viem';
+import { createWalletClient, custom, maxUint256 } from 'viem';
 import { base } from 'viem/chains';
 import ERC20_ABI from '@/abis/ERC20.json';
-import LIMIT_ORDER_ABI from '@/abis/LimitOrderProtocol.json';
 import { CONTRACT_ADDRESSES } from '@/config/base';
+
+// Import the OrderStruct type from limitOrder.ts
+type OrderStruct = {
+  maker: `0x${string}`;
+  receiver: `0x${string}`;
+  makerAsset: `0x${string}`;
+  takerAsset: `0x${string}`;
+  makingAmount: bigint;
+  takingAmount: bigint;
+  salt: bigint;
+  permit: `0x${string}`;
+  predicates: `0x${string}`;
+  interactions: `0x${string}`;
+};
 
 /** read remaining() every 30 s */
 export const useRemaining = (hash?: `0x${string}`) =>
@@ -24,8 +37,8 @@ export const useCreateOrder = () =>
 /** fill an order (or a TWAP chunk) */
 export const useFillOrder = () =>
   useMutation({
-    mutationFn: ({ order, signature }: { order: any; signature: `0x${string}` }) =>
-      fillOrderTx(order, signature),
+    mutationFn: ({ order, signature, account }: { order: OrderStruct; signature: `0x${string}`; account: `0x${string}` }) =>
+      fillOrderTx(order, signature, account),
   });
 
 const client = createWalletClient({
@@ -52,7 +65,7 @@ export const useCancelOrder = () =>
     mutationFn: async (orderHash: `0x${string}`) => {
       // TODO: Implement proper cancel functionality
       // For now, just return a placeholder
-      console.log('Cancelling order:', orderHash);
+      
       throw new Error('Cancel functionality not yet implemented');
     },
   }); 

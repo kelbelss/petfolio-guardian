@@ -14,6 +14,11 @@ import MyFeeds from '@/pages/dca/feeds';
 import RegularSwap from '@/pages/regularSwap';
 import MarketAnalysis from '@/pages/market-analysis/market-analysis';
 import HowItWorks from '@/pages/how-it-works';
+import YieldFeedWizard from '@/pages/yield-feed/yield-feed';
+import GeneralYieldWizard from '@/pages/yield-feed/general-yield';
+import AaveYieldWizard from '@/pages/yield-feed/aave-yield';
+import FriendDcaWizard from '@/pages/yield-feed/friend-dca';
+import TokenDcaWizard from '@/pages/yield-feed/token-dca';
 import GasBadge from '@/components/GasBadge';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 
@@ -45,6 +50,9 @@ export default function App() {
           <Link to="/dca/feeds" className="text-emerald-600 hover:text-emerald-700 text-lg font-medium">
             My Feeds
           </Link>
+          <Link to="/yield-feed" className="text-emerald-600 hover:text-emerald-700 text-lg font-medium">
+            Yield Feed
+          </Link>
           <Link to="/how-it-works" className="text-emerald-600 hover:text-emerald-700 text-lg font-medium">
             How It Works
           </Link>
@@ -69,6 +77,11 @@ export default function App() {
           <Route path="/dca/feeds" element={<MyFeeds />} />
 
           <Route path="/regular-swap" element={<RegularSwap />} />
+          <Route path="/yield-feed" element={<YieldFeedWizard />} />
+          <Route path="/yield-feed/general" element={<GeneralYieldWizard />} />
+          <Route path="/yield-feed/aave" element={<AaveYieldWizard />} />
+          <Route path="/yield-feed/friend" element={<FriendDcaWizard />} />
+          <Route path="/yield-feed/token" element={<TokenDcaWizard />} />
           <Route path="/how-it-works" element={<HowItWorks />} />
           <Route path="*" element={<div className="max-w-3xl mx-auto p-6">Not Found</div>} />
         </Routes>
