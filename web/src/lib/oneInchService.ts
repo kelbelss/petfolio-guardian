@@ -17,7 +17,8 @@
 // - Cleaner error handling
 // - Consistent API patterns
 
-import { useQuery, type UseQueryOptions } from '@tanstack/react-query';
+import { useQuery, type UseQueryOptions, useQueryClient } from '@tanstack/react-query';
+import { useCallback } from 'react';
 
 // Configuration
 const CHAIN = 8453;
@@ -41,9 +42,15 @@ export function ix(path: string) {
 
 // Core API functions
 /** GET /quote */
-export async function getQuote(src: string, dst: string, amount: string) {
-  const qs = new URLSearchParams({ src, dst, amount }).toString();
-  const url = ix(`/swap/v6.0/${CHAIN}/quote?${qs}`);
+export async function getQuote(src: string, dst: string, amount: string, includeGas = true, includeProtocols = true) {
+  const params = new URLSearchParams({ 
+    src, 
+    dst, 
+    amount,
+    includeGas: includeGas.toString(),
+    includeProtocols: includeProtocols.toString()
+  });
+  const url = ix(`/swap/v6.0/${CHAIN}/quote?${params}`);
   const response = await fetch(url, { headers: HEADERS });
   
   if (!response.ok) {
@@ -72,7 +79,7 @@ export async function getSwapTx(params: Record<string, string>) {
 
 /** GET /tokens - get token list */
 export async function getTokens() {
-  const url = ix(`/token/v1.2/${CHAIN}`);
+  const url = ix(`/token/v1.3/${CHAIN}`);
   const response = await fetch(url, { headers: HEADERS });
   
   if (!response.ok) {
@@ -97,19 +104,46 @@ export async function getBalances(address: string, tokenAddrs: string[]) {
 
 /** GET /price - get token price */
 export async function getTokenPrice(tokenAddress: string) {
-  const url = ix(`/price/v1.1/${CHAIN}/${tokenAddress}`);
-  const response = await fetch(url, { headers: HEADERS });
+  // 1inch spot-price endpoint is POST /v1.1/{chain} with a JSON body
+  const url   = ix(`/price/v1.1/${CHAIN}`);
+  const body  = JSON.stringify({ 
+    tokens: [tokenAddress],
+    currency: "USD"
+  });
   
-  if (!response.ok) {
-    throw new Error(`Price failed: ${response.status} ${response.statusText}`);
+  const res   = await fetch(url, { method: 'POST', headers: HEADERS, body });
+  if (!res.ok) {
+    throw new Error(`Price failed: ${res.status} ${res.statusText}`);
   }
-  
-  return response.json();
+  // →  { "0x…tokenAddress": "1230000000000000000" }
+  const data = await res.json() as Record<string, string>;
+  return data;
 }
 
-/** GET /gas-price - get gas price */
+/** GET /price - get bulk token prices */
+export async function getBulkTokenPrices(tokenAddresses: string[]) {
+  if (tokenAddresses.length === 0) return {};
+  
+  // 1inch spot-price endpoint is POST /v1.1/{chain} with a JSON body
+  const url   = ix(`/price/v1.1/${CHAIN}`);
+  const body  = JSON.stringify({ 
+    tokens: tokenAddresses,
+    currency: "USD"
+  });
+  
+  const res   = await fetch(url, { method: 'POST', headers: HEADERS, body });
+  if (!res.ok) {
+    console.warn(`Bulk price failed: ${res.status} ${res.statusText}`);
+    return {};
+  }
+  // →  { "0x…tokenAddress": "1230000000000000000" }
+  const data = await res.json() as Record<string, string>;
+  return data;
+}
+
+/** GET /gas-price - get current gas price */
 export async function getGasPrice() {
-  const url = ix(`/gas-price/v1.5/${CHAIN}`);
+  const url = ix(`/gas-price/v1.4/${CHAIN}`);
   const response = await fetch(url, { headers: HEADERS });
   
   if (!response.ok) {
@@ -119,7 +153,7 @@ export async function getGasPrice() {
   return response.json();
 }
 
-// Types
+// Type definitions
 export interface TokenMeta {
   address: string;
   symbol: string;
@@ -133,12 +167,46 @@ export interface TokenMetadataResponse {
 }
 
 export interface QuoteResponse {
-  fromToken: TokenMeta;
-  toToken: TokenMeta;
-  fromTokenAmount: string;
-  toTokenAmount: string;
-  estimatedGas: string;
-  validUntil: number;
+  dstAmount: string; // Amount of destination token
+  protocols: Array<{
+    name: string;
+    part: number;
+    fromTokenAddress: string;
+    toTokenAddress: string;
+  }>;
+  gas: number; // Gas estimate
+}
+
+// Helper to normalize balance data from different API response shapes
+export function normalizeBalances(data: { balances?: Record<string, string> } | Array<{ tokenAddress: string; balance: string }> | Record<string, string> | null | undefined): Record<string, string> {
+  if (!data) return {};
+  
+  // Handle { balances: Record<string, string> } format
+  if (data && typeof data === 'object' && 'balances' in data && data.balances) {
+    return data.balances;
+  }
+  
+  // Handle Array<{ tokenAddress: string; balance: string }> format
+  if (Array.isArray(data)) {
+    return Object.fromEntries(
+      data.map((item: { tokenAddress: string; balance: string }) => [
+        item.tokenAddress,
+        item.balance
+      ])
+    );
+  }
+  
+  // Handle direct Record<string, string> format (what the API actually returns)
+  if (data && typeof data === 'object' && !Array.isArray(data) && !('balances' in data)) {
+    const recordData = data as Record<string, unknown>;
+    // Check if all values are strings (balance values)
+    const allStrings = Object.values(recordData).every(value => typeof value === 'string');
+    if (allStrings) {
+      return data as Record<string, string>;
+    }
+  }
+  
+  return {};
 }
 
 // React Query hooks
@@ -146,24 +214,22 @@ export const useQuote = (
   src: string,
   dst: string,
   amount: string,
+  includeGas = true,
+  includeProtocols = true,
   opts?: Partial<UseQueryOptions>
 ) =>
   useQuery({
-    queryKey: ['quote', src, dst, amount],
-    queryFn: async () => {
-      const r = await getQuote(src, dst, amount);
-      // Normalize response to always have toTokenAmount
-      return r.toTokenAmount ? r : { ...r, toTokenAmount: r.dstAmount };
-    },
-    enabled: !!src && !!dst && !!amount && amount !== '0' && src !== dst,
-    staleTime: 30_000,
+    queryKey: ['quote', src, dst, amount, includeGas, includeProtocols],
+    queryFn: () => getQuote(src, dst, amount, includeGas, includeProtocols),
+    enabled: !!src && !!dst && src !== dst && !!amount && amount !== '0',
+    staleTime: 1000 * 10, // 10 seconds
     retry: 2,
     ...opts,
   });
 
 export const useSwapTx = (params: Record<string, string>) =>
   useQuery({
-    queryKey: ['swap', params],
+    queryKey: ['swap', params.src, params.dst, params.amount, params.from, params.slippage, params.receiver],
     queryFn: () => getSwapTx(params),
     enabled: Object.keys(params).length > 0,
     staleTime: 1000 * 5, // 5 seconds
@@ -183,8 +249,12 @@ export const useBalances = (address: string, tokenAddrs: string[]) =>
     queryKey: ['balances', address, tokenAddrs],
     queryFn: () => getBalances(address, tokenAddrs),
     enabled: !!address && tokenAddrs.length > 0,
-    staleTime: 1000 * 30, // 30 seconds
+    staleTime: 1000 * 10, // 10 seconds - shorter for more responsive updates
+    gcTime: 1000 * 60 * 5, // 5 minutes - keep in cache longer
     retry: 2,
+    refetchOnWindowFocus: true, // Refetch when user returns to tab
+    refetchOnMount: true, // Refetch when component mounts
+    refetchOnReconnect: true, // Refetch when network reconnects
   });
 
 export const useTokenPrice = (tokenAddress: string) =>
@@ -196,10 +266,38 @@ export const useTokenPrice = (tokenAddress: string) =>
     retry: 2,
   });
 
+export const useBulkTokenPrices = (tokenAddresses: string[]) =>
+  useQuery({
+    queryKey: ['bulk-prices', tokenAddresses],
+    queryFn: () => getBulkTokenPrices(tokenAddresses),
+    enabled: tokenAddresses.length > 0,
+    staleTime: 1000 * 60, // 1 minute
+    retry: 2,
+  });
+
 export const useGasPrice = () =>
   useQuery({
     queryKey: ['gas-price', CHAIN],
     queryFn: getGasPrice,
     staleTime: 1000 * 30, // 30 seconds
     retry: 2,
-  }); 
+  });
+
+// Hook to get query client for manual cache invalidation
+export function useBalanceCache() {
+  const queryClient = useQueryClient();
+  
+  const invalidateBalances = useCallback((address?: string) => {
+    if (address) {
+      queryClient.invalidateQueries({ 
+        queryKey: ['balances', address] 
+      });
+    } else {
+      queryClient.invalidateQueries({ 
+        queryKey: ['balances'] 
+      });
+    }
+  }, [queryClient]);
+
+  return { invalidateBalances };
+} 
