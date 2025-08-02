@@ -60,20 +60,7 @@ export default function FeedWizard() {
 
     const watchedValues = watch();
 
-    // Show connect wallet screen if not connected
-    if (!address) {
-        return (
-            <div className="w-full bg-[#effdf4] min-h-screen flex items-center justify-center">
-                <div className="bg-white rounded-2xl p-12 border border-green-200 shadow-lg max-w-2xl mx-auto text-center">
-                    <h2 className="text-2xl font-bold mb-4 text-emerald-700">Connect Your Wallet</h2>
-                    <p className="text-gray-600 mb-6">Connect your wallet to create a DCA feed</p>
-                    <ConnectButton />
-                </div>
-            </div>
-        );
-    }
-
-    // Get tokens
+    // Get tokens - moved before early return to follow Rules of Hooks
     const { data: tokensData } = useTokens();
     const availableTokens = useMemo(() => {
         if (!tokensData) return [];
@@ -102,13 +89,26 @@ export default function FeedWizard() {
         tokenAddresses
     );
 
-    // 🆕 helper – keep renders clean
-    const getUsd = (priceObj: Record<string, string> | undefined, addr?: string) =>
-        decodeUsd(priceObj, addr);
-
     // Get price data for selected tokens
     const { data: rawFromPrice } = useTokenPrice(fromToken?.address || '');
     const { data: rawToPrice } = useTokenPrice(toToken?.address || '');
+
+    // Show connect wallet screen if not connected
+    if (!address) {
+        return (
+            <div className="w-full bg-[#effdf4] min-h-screen flex items-center justify-center">
+                <div className="bg-white rounded-2xl p-12 border border-green-200 shadow-lg max-w-2xl mx-auto text-center">
+                    <h2 className="text-2xl font-bold mb-4 text-emerald-700">Connect Your Wallet</h2>
+                    <p className="text-gray-600 mb-6">Connect your wallet to create a DCA feed</p>
+                    <ConnectButton />
+                </div>
+            </div>
+        );
+    }
+
+    // 🆕 helper – keep renders clean
+    const getUsd = (priceObj: Record<string, string> | undefined, addr?: string) =>
+        decodeUsd(priceObj, addr);
 
     const fromPriceUsd = useMemo(
         () => getUsd(rawFromPrice, fromToken?.address),
