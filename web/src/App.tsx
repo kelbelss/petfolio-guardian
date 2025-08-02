@@ -7,7 +7,6 @@ import ConnectButton from '@/components/ConnectButton';
 import { Toaster } from '@/components/ui/toaster';
 import { Button } from '@/components/ui/button';
 import { emeraldColors } from '@/lib/styles';
-import DcaSetup from '@/pages/dca/setup';
 import DcaReview from '@/pages/dca/review';
 import MyFeeds from '@/pages/dca/feeds';
 
@@ -17,7 +16,7 @@ import HowItWorks from '@/pages/how-it-works';
 import YieldFeedWizard from '@/pages/yield-feed/yield-feed';
 import GeneralYieldWizard from '@/pages/yield-feed/general-yield';
 import AaveYieldWizard from '@/pages/yield-feed/aave-yield';
-import FriendDcaWizard from '@/pages/yield-feed/friend-dca';
+import FriendDcaWizard from '@/pages/dca/friend';
 import TokenDcaWizard from '@/pages/yield-feed/token-dca';
 import GasBadge from '@/components/GasBadge';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
@@ -72,7 +71,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/market-analysis" element={<MarketAnalysis />} />
-          <Route path="/dca/setup" element={<DcaSetup />} />
+          <Route path="/dca/setup" element={<TokenDcaWizard />} />
           <Route path="/dca/review" element={<DcaReview />} />
           <Route path="/dca/feeds" element={<MyFeeds />} />
 
@@ -80,8 +79,8 @@ export default function App() {
           <Route path="/yield-feed" element={<YieldFeedWizard />} />
           <Route path="/yield-feed/general" element={<GeneralYieldWizard />} />
           <Route path="/yield-feed/aave" element={<AaveYieldWizard />} />
-          <Route path="/yield-feed/friend" element={<FriendDcaWizard />} />
-          <Route path="/yield-feed/token" element={<TokenDcaWizard />} />
+          <Route path="/dca/friend" element={<FriendDcaWizard />} />
+          <Route path="/yield-feed/token-dca" element={<TokenDcaWizard />} />
           <Route path="/how-it-works" element={<HowItWorks />} />
           <Route path="*" element={<div className="max-w-3xl mx-auto p-6">Not Found</div>} />
         </Routes>

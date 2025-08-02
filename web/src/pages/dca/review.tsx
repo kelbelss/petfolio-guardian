@@ -1,4 +1,5 @@
 import { useFeedStore } from '../../lib/feedStore';
+import { useYieldFeedStore } from '../../lib/yieldFeedStore';
 import { useState } from 'react';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -106,7 +107,11 @@ const TokenAddress = ({ address }: { address: string }) => {
 };
 
 export default function TokenDcaReview() {
-    const draft = useFeedStore();
+    const feedDraft = useFeedStore();
+    const yieldDraft = useYieldFeedStore();
+
+    // Use the appropriate draft based on explicit mode check and data availability
+    const draft = yieldDraft.mode === 'friend' ? yieldDraft : feedDraft;
 
 
 
@@ -128,12 +133,15 @@ export default function TokenDcaReview() {
         ? toWei(draft.chunkIn.toString(), 18) // Back to 18 decimals
         : '0';
 
-    // Fetch a price quote
+    // Check if same token transfer
+    const isSameToken = draft.srcToken === draft.dstToken;
+
+    // Fetch a price quote (skip for same token transfers)
     const quoteEnabled = Boolean(
         draft.srcToken &&
         draft.dstToken &&
         amountWei !== '0' &&
-        draft.srcToken !== draft.dstToken
+        !isSameToken
     );
 
     const {
@@ -163,21 +171,22 @@ export default function TokenDcaReview() {
 
 
 
-    // Loading & error states
-    if (quoteLoading) {
-        return <div className="p-6 text-center">Loading price quote…</div>;
+    // Loading & error states (skip for same token transfers)
+    if (!isSameToken) {
+        if (quoteLoading) {
+            return <div className="p-6 text-center">Loading price quote…</div>;
+        }
+        if (quoteError || !rawAmount) {
+            return (
+                <div className="p-6 text-center text-red-600">
+                    Error fetching quote. Please try again.
+                </div>
+            );
+        }
     }
-    if (quoteError || !rawAmount) {
-        return (
-            <div className="p-6 text-center text-red-600">
-                Error fetching quote. Please try again.
 
-            </div>
-        );
-    }
-
-    // Convert to human units
-    const takingHuman = fromWei(rawAmount, 18); // Back to 18 decimals
+    // Convert to human units (for same token, use chunkIn as takingHuman)
+    const takingHuman = isSameToken ? draft.chunkIn : fromWei(rawAmount, 18);
 
     // Redirect if draft incomplete
     if (!draft.srcToken || !draft.dstToken) {
@@ -190,8 +199,8 @@ export default function TokenDcaReview() {
         endDate: draft.endDate,
         totalAmount: draft.totalAmount,
         interval: draft.interval,
-        slippageTolerance: draft.slippageTolerance,
-        quoteAmount: rawAmount,
+        slippageTolerance: isSameToken ? 0 : draft.slippageTolerance, // Set minSlippage = 0 for same token
+        quoteAmount: isSameToken ? amountWei : rawAmount, // Use chunkIn as quoteAmount for same token
     });
 
     // Compute TWAP parameters for the new contract structure
@@ -200,8 +209,10 @@ export default function TokenDcaReview() {
         endDate: draft.endDate,
         totalAmount: draft.totalAmount,
         interval: draft.interval,
-        slippageTolerance: draft.slippageTolerance,
-        quoteAmount: rawAmount,
+        slippageTolerance: isSameToken ? 0 : draft.slippageTolerance, // Set minSlippage = 0 for same token
+        quoteAmount: isSameToken ? amountWei : rawAmount, // Use chunkIn as quoteAmount for same token
+        depositToAave: false, // Always false for friend mode
+        recipient: draft.mode === 'friend' ? draft.recipient as `0x${string}` : address as `0x${string}`,
     });
 
     // Confirm handler: build and store limit order
@@ -268,6 +279,12 @@ export default function TokenDcaReview() {
                         chunkIn: twapParams.twapParams.chunkIn,
                         minOut: twapParams.twapParams.minOut,
                     },
+                    // Add Aave parameters for recipient handling
+                    aaveParams: {
+                        depositToAave: false, // Always false for friend mode
+                        recipient: draft.mode === 'friend' ? draft.recipient as `0x${string}` : address as `0x${string}`,
+                        aavePool: '0x0000000000000000000000000000000000000000' as `0x${string}`,
+                    },
                 });
 
                 // 8) Store order metadata
@@ -318,8 +335,12 @@ export default function TokenDcaReview() {
         <div className="w-full bg-[#effdf4] min-h-screen">
             <div className="max-w-4xl mx-auto p-8">
                 <div className="mb-8">
-                    <h1 className="text-4xl font-bold text-emerald-700 mb-2">Review Token DCA Strategy</h1>
-                    <p className="text-gray-600 text-lg">Confirm your automated token purchase strategy</p>
+                    <h1 className="text-4xl font-bold text-emerald-700 mb-2">
+                        Review {draft.mode === 'friend' ? 'Friend DCA' : draft.mode === 'general' ? 'General Yield' : draft.mode === 'aave' ? 'Aave Yield' : 'Token DCA'} Strategy
+                    </h1>
+                    <p className="text-gray-600 text-lg">
+                        Confirm your automated {draft.mode === 'friend' ? 'friend DCA' : draft.mode === 'general' ? 'yield farming' : draft.mode === 'aave' ? 'Aave yield' : 'token purchase'} strategy
+                    </p>
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 min-w-0">
@@ -356,12 +377,19 @@ export default function TokenDcaReview() {
                                     </Row>
                                 )}
                                 <Row label="Slippage Tolerance">
-                                    {draft.slippageTolerance}%
+                                    {isSameToken ? '0% (Same token transfer)' : `${draft.slippageTolerance}%`}
                                 </Row>
-                                {/* Placeholder for future friend/yield pages */}
-                                <Row label="Recipient">
-                                    <span className="opacity-50">Self (default)</span>
-                                </Row>
+                                {/* Show recipient for friend mode */}
+                                {draft.mode === 'friend' && draft.recipient && (
+                                    <Row label="Recipient">
+                                        <TokenAddress address={draft.recipient} />
+                                    </Row>
+                                )}
+                                {draft.mode !== 'friend' && (
+                                    <Row label="Recipient">
+                                        <span className="opacity-50">Self (default)</span>
+                                    </Row>
+                                )}
                                 <Row label="Deposit to Aave">
                                     <span className="opacity-50">No</span>
                                 </Row>
@@ -392,9 +420,9 @@ export default function TokenDcaReview() {
                                     {fmt(Number(fromWei(twapParams.twapParams.minOut.toString(), 18)))}
                                 </Row>
                                 <Row label="Current Quote">
-                                    {fmt(Number(takingHuman))}
+                                    {isSameToken ? `${fmt(Number(takingHuman))} (Same token transfer)` : fmt(Number(takingHuman))}
                                 </Row>
-                                {quoteResponse?.protocols && quoteResponse.protocols.length > 0 && (
+                                {!isSameToken && quoteResponse?.protocols && quoteResponse.protocols.length > 0 && (
                                     <Row label="Route">
                                         {quoteResponse.protocols.map((protocol, index) =>
                                             `${protocol.name} ${Math.round(protocol.part * 100)}%${index < quoteResponse.protocols.length - 1 ? ', ' : ''}`
@@ -417,7 +445,12 @@ export default function TokenDcaReview() {
                 <CardFooter className="flex justify-between pt-8">
                     <Button
                         variant="outline"
-                        onClick={() => navigate('/yield-feed/token-dca')}
+                        onClick={() => navigate(
+                            draft.mode === 'friend' ? '/dca/friend' :
+                                draft.mode === 'general' ? '/yield-feed/general-yield' :
+                                    draft.mode === 'aave' ? '/yield-feed/aave-yield' :
+                                        '/yield-feed/token-dca'
+                        )}
                         className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
                     >
                         ← Back to Setup
@@ -427,7 +460,7 @@ export default function TokenDcaReview() {
                         disabled={isLoading}
                         className="bg-gradient-to-r from-emerald-500 to-emerald-600 text-white hover:from-emerald-600 hover:to-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed"
                     >
-                        {isLoading ? 'Creating Order...' : 'Create DCA Strategy'}
+                        {isLoading ? 'Creating Order...' : `Create ${draft.mode === 'friend' ? 'Friend DCA' : draft.mode === 'general' ? 'General Yield' : draft.mode === 'aave' ? 'Aave Yield' : 'DCA'} Strategy`}
                     </Button>
                 </CardFooter>
             </div>

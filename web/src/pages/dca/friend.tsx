@@ -1,11 +1,11 @@
-
 import React, { useMemo, useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useNavigate } from 'react-router-dom';
-import { useFeedStore } from '@/lib/feedStore';
+import { useYieldFeedStore } from '@/lib/yieldFeedStore';
 import { useAccount } from 'wagmi';
+import { isAddress } from 'viem';
 import { useBalances, useTokens, useTokenPrice, type TokenMeta, normalizeBalances } from '@/lib/oneInchService';
 import { toFloat, decodeUsd } from '@/lib/tokenUtils';
 import { Label } from '@/components/ui/label';
@@ -22,6 +22,13 @@ const formSchema = z.object({
     stopCondition: z.enum(['end-date', 'total-amount']),
     endDate: z.date().optional(),
     totalAmount: z.number().min(0.01, 'Total amount must be at least 0.01').optional(),
+    recipientAddress: z.string().refine((val) => {
+        if (!val) return false;
+        // Check if it's a valid address or looks like an ENS name
+        return isAddress(val as `0x${string}`) || val.includes('.');
+    }, {
+        message: 'Invalid recipient address. Please enter a valid Ethereum address or ENS name.',
+    }),
 }).refine((data) => {
     if (data.stopCondition === 'end-date') {
         return data.endDate !== undefined;
@@ -37,24 +44,28 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>;
 
-export default function FeedWizard() {
+export default function FriendDcaWizard() {
     const navigate = useNavigate();
-    const setDraft = useFeedStore.setState;
+    const setDraft = useYieldFeedStore.setState;
     const [isCalendarOpen, setIsCalendarOpen] = useState(false);
     const { address } = useAccount();
 
-    const existingDraft = useFeedStore();
+
+
+
+    const existingDraft = useYieldFeedStore();
 
     const { control, handleSubmit, watch, setValue, formState: { errors } } = useForm<FormValues>({
         resolver: zodResolver(formSchema),
         defaultValues: {
             srcToken: existingDraft.srcToken || '',
-            dstToken: existingDraft.dstToken || '',
+            dstToken: existingDraft.dstToken || existingDraft.srcToken || '',
             chunkIn: existingDraft.chunkIn ? existingDraft.chunkIn.toString() : '',
             interval: existingDraft.interval || 3600,
             stopCondition: existingDraft.stopCondition || 'end-date',
             endDate: existingDraft.endDate ? new Date(existingDraft.endDate) : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-            totalAmount: existingDraft.totalAmount || 100,
+            totalAmount: existingDraft.totalAmount || 0,
+            recipientAddress: '',
         },
     });
 
@@ -93,19 +104,6 @@ export default function FeedWizard() {
     const { data: rawFromPrice } = useTokenPrice(fromToken?.address || '');
     const { data: rawToPrice } = useTokenPrice(toToken?.address || '');
 
-    // Show connect wallet screen if not connected
-    if (!address) {
-        return (
-            <div className="w-full bg-[#effdf4] min-h-screen flex items-center justify-center">
-                <div className="bg-white rounded-2xl p-12 border border-green-200 shadow-lg max-w-2xl mx-auto text-center">
-                    <h2 className="text-2xl font-bold mb-4 text-emerald-700">Connect Your Wallet</h2>
-                    <p className="text-gray-600 mb-6">Connect your wallet to create a DCA feed</p>
-                    <ConnectButton />
-                </div>
-            </div>
-        );
-    }
-
     // 🆕 helper – keep renders clean
     const getUsd = (priceObj: Record<string, string> | undefined, addr?: string) =>
         decodeUsd(priceObj, addr);
@@ -138,6 +136,19 @@ export default function FeedWizard() {
         return { balance, usdValue, symbol: fromToken.symbol };
     }, [balancesData, fromToken, fromPriceUsd]);
 
+    // Show connect wallet screen if not connected
+    if (!address) {
+        return (
+            <div className="w-full bg-[#effdf4] min-h-screen flex items-center justify-center">
+                <div className="bg-white rounded-2xl p-12 border border-green-200 shadow-lg max-w-2xl mx-auto text-center">
+                    <h2 className="text-2xl font-bold mb-4 text-emerald-700">Connect Your Wallet</h2>
+                    <p className="text-gray-600 mb-6">Connect your wallet to create a friend DCA strategy</p>
+                    <ConnectButton />
+                </div>
+            </div>
+        );
+    }
+
     const onSubmit = (data: FormValues) => {
         setDraft({
             srcToken: data.srcToken,
@@ -147,6 +158,9 @@ export default function FeedWizard() {
             stopCondition: data.stopCondition,
             endDate: data.endDate ? data.endDate.toISOString() : undefined,
             totalAmount: data.totalAmount,
+            recipientAddress: data.recipientAddress,
+            mode: 'friend',
+            recipient: data.recipientAddress,
         });
         navigate('/dca/review');
     };
@@ -155,62 +169,83 @@ export default function FeedWizard() {
         <div className="w-full bg-[#effdf4] min-h-screen">
             <div className="max-w-4xl mx-auto p-8">
                 <div className="mb-8">
-                    <h1 className="text-4xl font-bold text-emerald-700 mb-2">Create DCA Feed</h1>
-                    <p className="text-gray-600 text-lg">Set up automated token purchases to keep your pet healthy</p>
+                    <h1 className="text-4xl font-bold text-emerald-700 mb-2">Create Friend DCA Strategy</h1>
+                    <p className="text-gray-600 text-lg">Set up automated DCA for your friends to help them build wealth</p>
                 </div>
 
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
                     <div className="bg-white rounded-xl shadow-lg border border-emerald-200 p-8">
-                        <h2 className="text-2xl font-bold text-emerald-700 mb-6">Token Configuration</h2>
+                        <h2 className="text-2xl font-bold text-emerald-700 mb-6">Friend DCA Configuration</h2>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div className="space-y-6">
                             <div className="space-y-3">
-                                <Label htmlFor="srcToken" className="text-sm font-semibold text-gray-700 block">Source Token</Label>
-                                <TokenInput
-                                    mode="dca"
-                                    token={fromToken}
-                                    amount={watchedValues.chunkIn || ''}
-                                    onTokenChange={(token) => setValue('srcToken', token.address)}
-                                    onAmountChange={(amount) => setValue('chunkIn', amount)}
-                                    showMax={false}
-                                    balance={balanceData.balance.toString()}
-                                    availableTokens={availableTokens}
-                                    tokenPrice={fromPriceUsd}
+                                <Label htmlFor="recipientAddress" className="text-sm font-semibold text-gray-700 block">Recipient Address</Label>
+                                <Controller
+                                    name="recipientAddress"
+                                    control={control}
+                                    render={({ field }) => (
+                                        <Input
+                                            id="recipientAddress"
+                                            type="text"
+                                            placeholder="0x... or name.eth"
+                                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors font-mono"
+                                            {...field}
+                                        />
+                                    )}
                                 />
-                                {errors.srcToken && <p className="text-red-500 text-sm mt-2">{errors.srcToken.message}</p>}
+                                {errors.recipientAddress && <p className="text-red-500 text-sm mt-2">{errors.recipientAddress.message}</p>}
                             </div>
 
-                            <div className="space-y-3">
-                                <Label htmlFor="dstToken" className="text-sm font-semibold text-gray-700 block">Destination Token</Label>
-                                <TokenInput
-                                    mode="dca"
-                                    token={toToken}
-                                    amount=""
-                                    onTokenChange={(token) => setValue('dstToken', token.address)}
-                                    onAmountChange={() => { }} // No amount input for destination
-                                    showMax={false}
-                                    hideInput={true}
-                                    availableTokens={availableTokens}
-                                    tokenPrice={toPriceUsd}
-                                />
-                                {errors.dstToken && <p className="text-red-500 text-sm mt-2">{errors.dstToken.message}</p>}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                <div className="space-y-3">
+                                    <Label htmlFor="srcToken" className="text-sm font-semibold text-gray-700 block">Source Token</Label>
+                                    <TokenInput
+                                        mode="dca"
+                                        token={fromToken}
+                                        amount={watchedValues.chunkIn || ''}
+                                        onTokenChange={(token) => setValue('srcToken', token.address)}
+                                        onAmountChange={(amount) => setValue('chunkIn', amount)}
+                                        showMax={false}
+                                        balance={balanceData.balance.toString()}
+                                        availableTokens={availableTokens}
+                                        tokenPrice={fromPriceUsd}
+                                    />
+                                    {errors.srcToken && <p className="text-red-500 text-sm mt-2">{errors.srcToken.message}</p>}
+                                </div>
+
+                                <div className="space-y-3">
+                                    <Label htmlFor="dstToken" className="text-sm font-semibold text-gray-700 block">Destination Token</Label>
+                                    <TokenInput
+                                        mode="dca"
+                                        token={toToken}
+                                        amount=""
+                                        onTokenChange={(token) => setValue('dstToken', token.address)}
+                                        onAmountChange={() => { }} // No amount input for destination
+                                        showMax={false}
+                                        hideInput={true}
+                                        availableTokens={availableTokens}
+                                        tokenPrice={toPriceUsd}
+                                    />
+                                    {errors.dstToken && <p className="text-red-500 text-sm mt-2">{errors.dstToken.message}</p>}
+                                </div>
                             </div>
+
+                            {errors.chunkIn && <p className="text-red-500 text-sm mt-2">{errors.chunkIn.message}</p>}
                         </div>
-
-                        {errors.chunkIn && <p className="text-red-500 text-sm mt-2">{errors.chunkIn.message}</p>}
                     </div>
 
                     <div className="bg-white rounded-xl shadow-lg border border-emerald-200 p-8">
-                        <h2 className="text-2xl font-bold text-emerald-700 mb-6">Feeding Schedule</h2>
+                        <h2 className="text-2xl font-bold text-emerald-700 mb-6">Friend DCA Schedule</h2>
 
                         <div className="space-y-3">
-                            <Label htmlFor="interval" className="text-sm font-semibold text-gray-700 block">Feeding Interval</Label>
+                            <Label htmlFor="interval" className="text-sm font-semibold text-gray-700 block">DCA Interval</Label>
                             <Controller
                                 name="interval"
                                 control={control}
                                 render={({ field }) => (
                                     <select
-                                        {...field}
+                                        value={field.value}
+                                        onChange={(e) => field.onChange(Number(e.target.value))}
                                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors"
                                     >
                                         <option value={300}>Every 5 minutes</option>
@@ -264,27 +299,54 @@ export default function FeedWizard() {
                                     )}
                                 />
                                 {errors.endDate && <p className="text-red-500 text-sm mt-2">{errors.endDate.message}</p>}
+
+                                {/* Show calculated total when end date is selected */}
+                                {watchedValues.endDate && watchedValues.chunkIn && watchedValues.interval && fromPriceUsd > 0 && (
+                                    <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
+                                        <div className="flex justify-between items-center">
+                                            <span>Estimated total:</span>
+                                            <span className="font-semibold">≈ ${(() => {
+                                                const endDate = new Date(watchedValues.endDate);
+                                                const now = new Date();
+                                                const totalSeconds = Math.floor((endDate.getTime() - now.getTime()) / 1000);
+                                                const totalCycles = Math.floor(totalSeconds / Number(watchedValues.interval));
+                                                const totalAmount = totalCycles * Number(watchedValues.chunkIn);
+                                                return (totalAmount * fromPriceUsd).toFixed(2);
+                                            })()}</span>
+                                        </div>
+                                        <div className="text-xs text-gray-500 mt-1">
+                                            Based on {Math.floor((new Date(watchedValues.endDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))} days
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
                             <div className={`space-y-3 ${watchedValues.stopCondition !== 'total-amount' ? 'opacity-50 pointer-events-none' : ''}`}>
                                 <Label htmlFor="totalAmount" className="text-sm font-semibold text-gray-700 block">Total Amount to DCA</Label>
-                                <Controller
-                                    name="totalAmount"
-                                    control={control}
-                                    render={({ field }) => (
-                                        <Input
-                                            id="totalAmount"
-                                            type="number"
-                                            min={0.01}
-                                            step={0.01}
-                                            placeholder="0.00"
-                                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors"
-                                            {...field}
-                                            value={field.value === 0 ? '' : field.value}
-                                            onChange={e => field.onChange(Number(e.target.value))}
-                                        />
+                                <div className="relative">
+                                    <Controller
+                                        name="totalAmount"
+                                        control={control}
+                                        render={({ field }) => (
+                                            <Input
+                                                id="totalAmount"
+                                                type="number"
+                                                min={0.01}
+                                                step={0.01}
+                                                placeholder="0.00"
+                                                className="w-full px-4 py-3 pr-20 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                                {...field}
+                                                value={field.value === 0 ? '' : field.value}
+                                                onChange={e => field.onChange(Number(e.target.value) || 0)}
+                                            />
+                                        )}
+                                    />
+                                    {(watchedValues.totalAmount || 0) > 0 && fromPriceUsd > 0 && (
+                                        <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-sm text-gray-500">
+                                            ≈ ${((watchedValues.totalAmount || 0) * fromPriceUsd).toFixed(2)}
+                                        </div>
                                     )}
-                                />
+                                </div>
                                 {errors.totalAmount && <p className="text-red-500 text-sm mt-2">{errors.totalAmount.message}</p>}
                             </div>
                         </div>
