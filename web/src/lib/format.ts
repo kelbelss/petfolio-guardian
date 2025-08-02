@@ -195,3 +195,61 @@ export function formatCurrency(amount: number, currency: string = 'USD', locale:
     maximumFractionDigits: 6,
   }).format(amount);
 } 
+
+/**
+ * Format relative time with timezone support
+ */
+export function formatRelativeTimeWithTimezone(timestamp: number, timezone: string = 'UTC'): string {
+  const now = Date.now();
+  const diff = now - timestamp;
+  const seconds = Math.floor(diff / 1000);
+  
+  if (seconds < 0) {
+    // Future timestamp - show absolute time instead
+    return formatAbsoluteTimeWithTimezone(timestamp, timezone);
+  } else if (seconds < 60) {
+    return 'Just now';
+  } else if (seconds < 3600) {
+    const minutes = Math.floor(seconds / 60);
+    return `${minutes} minute${minutes !== 1 ? 's' : ''} ago`;
+  } else if (seconds < 86400) {
+    const hours = Math.floor(seconds / 3600);
+    const remainingMinutes = Math.floor((seconds % 3600) / 60);
+    if (remainingMinutes > 0) {
+      return `${hours} hour${hours !== 1 ? 's' : ''} ${remainingMinutes} minute${remainingMinutes !== 1 ? 's' : ''} ago`;
+    } else {
+      return `${hours} hour${hours !== 1 ? 's' : ''} ago`;
+    }
+  } else {
+    const days = Math.floor(seconds / 86400);
+    return `${days} day${days !== 1 ? 's' : ''} ago`;
+  }
+}
+
+/**
+ * Format absolute time with timezone
+ */
+export function formatAbsoluteTimeWithTimezone(timestamp: number, timezone: string = 'UTC'): string {
+  try {
+    return new Date(timestamp).toLocaleString('en-US', {
+      timeZone: timezone,
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+  } catch (error) {
+    // Fallback to UTC if timezone is invalid
+    return new Date(timestamp).toLocaleString('en-US', {
+      timeZone: 'UTC',
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+  }
+} 
