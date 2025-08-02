@@ -25,7 +25,7 @@ contract TwapDcaIntegration is Test {
 
     function setUp() public {
         // fork url passed via terminal
-        vm.createSelectFork(vm.rpcUrl("mainnet"));
+        // vm.createSelectFork(vm.envUint("MAINNET_RPC_URL"));
 
         // deploy mocks locally
         permit2 = new MockPermit2();
@@ -58,7 +58,10 @@ contract TwapDcaIntegration is Test {
             srcToken: address(USDC),
             dstToken: address(USDC), // reuse USDC to simplify
             permit2: address(permit2), // mock permit2
-            permit2Data: bytes("") // no-op permit
+            permit2Data: bytes(""), // no-op permit
+            depositToAave: false, // normal wallet flow
+            recipient: address(0), // 0 ⇒ whale receives
+            aavePool: address(0) // unused when depositToAave==false
         });
         bytes memory interaction = abi.encode(params);
 

@@ -7,18 +7,21 @@ import {Test} from "forge-std/Test.sol";
 import {TwapDcaHook} from "../src/TwapDcaHook.sol";
 import {MockPermit2} from "./mocks/MockPermit2.sol";
 import {MockRouter} from "./mocks/MockRouter.sol";
+import {MockAavePool} from "./mocks/MockAavePool.sol";
 
 // OpenZeppelin ERC-20 types for the test
 import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
-import {ERC20Mock} from "../lib/openzeppelin-contracts/contracts/mocks/token/ERC20Mock.sol";
+import {ERC20Mock} from "../lib/openzeppelin-contracts/contracts/mocks/ERC20Mock.sol";
 
 contract TwapDcaHookTest is Test {
     TwapDcaHook public twapDcaHook;
     MockPermit2 public permit2;
     MockRouter public router;
+    MockAavePool public aavePool;
 
     address maker = vm.addr(1);
     address taker = vm.addr(2);
+    address custom = vm.addr(3); // custom recipient
     IERC20 usdc;
 
     function setUp() public {
@@ -26,6 +29,7 @@ contract TwapDcaHookTest is Test {
         router = new MockRouter();
         twapDcaHook = new TwapDcaHook(address(this)); // this acting as mock LOP
         ERC20Mock usdcMock = new ERC20Mock();
+        aavePool = new MockAavePool();
         usdcMock.mint(maker, 1e24); // 1 million USDC
         usdc = IERC20(address(usdcMock));
         // maker pre-mints USDC; bot/taker holds ETH (ignored here)
@@ -60,7 +64,10 @@ contract TwapDcaHookTest is Test {
             srcToken: address(usdc),
             dstToken: address(0xBEEF), // fake
             permit2: address(permit2),
-            permit2Data: bytes("") // skip validation in mocks
+            permit2Data: bytes(""), // skip validation in mocks
+            depositToAave: false,
+            recipient: address(0),
+            aavePool: address(0)
         });
 
         interaction = abi.encode(params);
@@ -132,5 +139,42 @@ contract TwapDcaHookTest is Test {
         vm.prank(address(this));
         vm.expectRevert(TwapDcaHook.SwapFailed.selector);
         twapDcaHook.preInteraction(interaction);
+    }
+
+    function testCustomRecipientGetsRouted() public {
+        // build params with custom recipient
+        (bytes memory interaction,) = _buildParams(1 hours);
+        TwapDcaHook.TwapParams memory params = abi.decode(interaction, (TwapDcaHook.TwapParams));
+        params.recipient = custom; // set non-zero address
+        interaction = abi.encode(params);
+
+        // expect DstRouted event
+        vm.expectEmit(true, true, false, false);
+        emit TwapDcaHook.DstRouted(params.orderHash, custom, false);
+
+        vm.prank(address(this));
+        twapDcaHook.preInteraction(interaction);
+    }
+
+    function testAaveDepositBranch() public {
+        // build params that trigger deposit
+        (bytes memory interaction,) = _buildParams(1 hours);
+        TwapDcaHook.TwapParams memory params = abi.decode(interaction, (TwapDcaHook.TwapParams));
+
+        params.depositToAave = true;
+        params.aavePool = address(aavePool);
+        params.dstToken = address(usdc);
+        interaction = abi.encode(params);
+
+        // expect routed event to user with toAave=true
+        vm.expectEmit(true, true, false, false);
+        emit TwapDcaHook.DstRouted(params.orderHash, maker, true);
+
+        vm.prank(address(this));
+        twapDcaHook.preInteraction(interaction);
+
+        // assert mock pool was hit
+        assertTrue(aavePool.called(), "supply() not called");
+        assertEq(aavePool.onBehalfOf(), maker, "wrong beneficiary");
     }
 }

@@ -11,7 +11,7 @@ import {MockRouter} from "./mocks/MockRouter.sol";
 
 // OpenZeppelin ERC-20 types for the test
 import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
-import {ERC20Mock} from "../lib/openzeppelin-contracts/contracts/mocks/token/ERC20Mock.sol";
+import {ERC20Mock} from "../lib/openzeppelin-contracts/contracts/mocks/ERC20Mock.sol";
 
 contract TwapDcaInvariants is StdInvariant, Test {
     TwapDcaHook public twapDcaHook;
@@ -88,7 +88,7 @@ contract TwapDcaInvariants is StdInvariant, Test {
 
         _hash = keccak256(rawOrder);
 
-        TwapDcaHook.TwapParams memory p = TwapDcaHook.TwapParams({
+        TwapDcaHook.TwapParams memory params = TwapDcaHook.TwapParams({
             rawOrder: rawOrder,
             orderHash: _hash,
             user: user_,
@@ -100,9 +100,12 @@ contract TwapDcaInvariants is StdInvariant, Test {
             srcToken: address(usdc),
             dstToken: address(0xBEEF),
             permit2: address(permit2),
-            permit2Data: bytes("")
+            permit2Data: bytes(""),
+            depositToAave: false, // normal wallet flow
+            recipient: address(0), // 0 ⇒ whale receives
+            aavePool: address(0) // unused when depositToAave==false
         });
 
-        _interaction = abi.encode(p);
+        _interaction = abi.encode(params);
     }
 }
