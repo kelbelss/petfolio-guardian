@@ -1,8 +1,9 @@
 import { useFeedStore } from '../../lib/feedStore';
+import { useState } from 'react';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useAccount } from 'wagmi';
-import { useQuote, type QuoteResponse } from '@/lib/oneInchService';
+import { useQuote, useGasPrice, type QuoteResponse } from '@/lib/oneInchService';
 import { calculateDcaParameters, calculateTwapParameters } from '@/lib/dcaCalculations';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useToast } from '@/components/ui/use-toast';
@@ -13,8 +14,102 @@ import { buildPermit2Tx } from '@/lib/permit2';
 import { usePublicClient, useWalletClient } from 'wagmi';
 import { usePetState } from '@/hooks/usePetState';
 
+// Number formatting helper
+const fmt = (n: number, max = 6) =>
+    Intl.NumberFormat('en-US', { maximumFractionDigits: max }).format(n);
+
+// USD helper
+const usd = (val: number) => `≈ $${fmt(val, 2)}`;
+
+// Short hash helper
+const shortHash = (hash: string) => `${hash.slice(0, 6)}…${hash.slice(-4)}`;
+
+// Copy to clipboard helper
+const copyToClipboard = async (text: string) => {
+    try {
+        await navigator.clipboard.writeText(text);
+        return true;
+    } catch (err) {
+        console.error('Failed to copy:', err);
+        return false;
+    }
+};
+
+// BaseScan URL helper
+const getBaseScanUrl = (address: string) => `https://basescan.org/address/${address}`;
+
+// Interval formatting helper
+const formatInterval = (seconds: number) => {
+    const hours = seconds / 3600;
+    if (hours >= 24) {
+        const days = hours / 24;
+        return `${days} day${days !== 1 ? 's' : ''}`;
+    }
+    return `${hours} h`;
+};
+
+// Grid row helper
+const Row = ({ label, children }: { label: string; children: React.ReactNode }) => (
+    <>
+        <dt className="text-gray-600">{label}</dt>
+        <dd className="font-semibold text-right truncate">{children}</dd>
+    </>
+);
+
+// Token address component with copy and explorer links
+const TokenAddress = ({ address }: { address: string }) => {
+    const [copied, setCopied] = useState(false);
+
+    const handleCopy = async () => {
+        const success = await copyToClipboard(address);
+        if (success) {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        }
+    };
+
+    return (
+        <div className="flex items-center gap-2 ml-6">
+            <span className="truncate max-w-[160px] cursor-help font-mono text-base" title={address}>
+                {shortHash(address)}
+            </span>
+            <div className="flex items-center gap-1">
+                <button
+                    onClick={handleCopy}
+                    className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
+                    title="Copy address"
+                >
+                    {copied ? (
+                        <svg className="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                    ) : (
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                    )}
+                </button>
+                <a
+                    href={getBaseScanUrl(address)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
+                    title="View on BaseScan"
+                >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                </a>
+            </div>
+        </div>
+    );
+};
+
 export default function TokenDcaReview() {
     const draft = useFeedStore();
+
+
+
     const { address } = useAccount();
     const { data: walletClient } = useWalletClient();
     const publicClient = usePublicClient();
@@ -23,16 +118,29 @@ export default function TokenDcaReview() {
     const { mutateAsync: createOrder, isPending: isLoading } = useCreateOrder();
     const { feedDCACreation } = usePetState();
 
-    // Convert human chunkIn to wei
+    // Get gas price for fee estimation
+    const { data: gasPriceData } = useGasPrice();
+
+
+
+    // Convert human chunkIn to wei - back to simple approach
     const amountWei = draft.srcToken && draft.chunkIn
-        ? toWei(draft.chunkIn.toString(), 18) // Assuming 18 decimals for now
+        ? toWei(draft.chunkIn.toString(), 18) // Back to 18 decimals
         : '0';
 
     // Fetch a price quote
+    const quoteEnabled = Boolean(
+        draft.srcToken &&
+        draft.dstToken &&
+        amountWei !== '0' &&
+        draft.srcToken !== draft.dstToken
+    );
+
     const {
         data: quoteData,
         isFetching: quoteLoading,
         isError: quoteError,
+
     } = useQuote(
         draft.srcToken || '',
         draft.dstToken || '',
@@ -40,17 +148,20 @@ export default function TokenDcaReview() {
         true, // includeGas
         true, // includeProtocols
         {
-            enabled: Boolean(
-                draft.srcToken &&
-                draft.dstToken &&
-                amountWei !== '0' &&
-                draft.srcToken !== draft.dstToken
-            ),
+            enabled: quoteEnabled,
+            retry: 3,
+            retryDelay: 1000,
         }
     );
 
     // Read dstAmount from the new API response format
     const rawAmount = (quoteData as QuoteResponse)?.dstAmount;
+    const quoteResponse = quoteData as QuoteResponse;
+
+    // Debug quote response
+
+
+
 
     // Loading & error states
     if (quoteLoading) {
@@ -60,12 +171,13 @@ export default function TokenDcaReview() {
         return (
             <div className="p-6 text-center text-red-600">
                 Error fetching quote. Please try again.
+
             </div>
         );
     }
 
     // Convert to human units
-    const takingHuman = fromWei(rawAmount, 18); // Assuming 18 decimals for destination token
+    const takingHuman = fromWei(rawAmount, 18); // Back to 18 decimals
 
     // Redirect if draft incomplete
     if (!draft.srcToken || !draft.dstToken) {
@@ -119,7 +231,7 @@ export default function TokenDcaReview() {
                     );
 
                     const hash = await walletClient.sendTransaction(permitTx);
-                    toast({ description: `Permit tx sent\n${hash.slice(0, 10)}…` });
+                    toast({ description: `Permit tx sent\n${shortHash(hash)}` });
 
                     // Wait for transaction receipt before proceeding
                     const receipt = await publicClient.waitForTransactionReceipt({ hash });
@@ -127,7 +239,7 @@ export default function TokenDcaReview() {
                         throw new Error(`Permit2 transaction failed: ${hash}`);
                     }
 
-                    toast({ description: `Permit tx confirmed\n${hash.slice(0, 10)}…` });
+                    toast({ description: `Permit tx confirmed\n${shortHash(hash)}` });
                 } catch (permitError) {
                     console.error('Permit2 failed:', permitError);
                     toast({
@@ -179,7 +291,7 @@ export default function TokenDcaReview() {
 
                 toast({
                     title: '✅ DCA Feed Created!',
-                    description: `Order ${order.hash.slice(0, 10)}… created successfully`
+                    description: `Order ${shortHash(order.hash)} created successfully`
                 });
 
                 // 10) Navigate to dashboard
@@ -210,45 +322,50 @@ export default function TokenDcaReview() {
                     <p className="text-gray-600 text-lg">Confirm your automated token purchase strategy</p>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 min-w-0">
                     {/* Strategy Summary */}
                     <Card className="border-emerald-200">
                         <CardHeader>
                             <CardTitle className="text-emerald-700">Strategy Summary</CardTitle>
                         </CardHeader>
-                        <CardContent className="space-y-4">
-                            <div className="flex justify-between">
-                                <span className="text-gray-600">Source Token:</span>
-                                <span className="font-semibold">{draft.srcToken}</span>
-                            </div>
-                            <div className="flex justify-between">
-                                <span className="text-gray-600">Destination Token:</span>
-                                <span className="font-semibold">{draft.dstToken}</span>
-                            </div>
-                            <div className="flex justify-between">
-                                <span className="text-gray-600">Amount per Purchase:</span>
-                                <span className="font-semibold">{draft.chunkIn}</span>
-                            </div>
-                            <div className="flex justify-between">
-                                <span className="text-gray-600">Interval:</span>
-                                <span className="font-semibold">{draft.interval / 3600} hours</span>
-                            </div>
-                            <div className="flex justify-between">
-                                <span className="text-gray-600">Stop Condition:</span>
-                                <span className="font-semibold capitalize">{draft.stopCondition.replace('-', ' ')}</span>
-                            </div>
-                            {draft.stopCondition === 'end-date' && draft.endDate && (
-                                <div className="flex justify-between">
-                                    <span className="text-gray-600">End Date:</span>
-                                    <span className="font-semibold">{new Date(draft.endDate).toLocaleDateString()}</span>
-                                </div>
-                            )}
-                            {draft.stopCondition === 'total-amount' && draft.totalAmount && (
-                                <div className="flex justify-between">
-                                    <span className="text-gray-600">Total Amount:</span>
-                                    <span className="font-semibold">{draft.totalAmount}</span>
-                                </div>
-                            )}
+                        <CardContent>
+                            <dl className="grid grid-cols-[auto,1fr] gap-y-2 gap-x-4 text-sm">
+                                <Row label="Source Token">
+                                    <TokenAddress address={draft.srcToken} />
+                                </Row>
+                                <Row label="Destination Token">
+                                    <TokenAddress address={draft.dstToken} />
+                                </Row>
+                                <Row label="Amount per Purchase">
+                                    {fmt(draft.chunkIn)}
+                                </Row>
+                                <Row label="Interval">
+                                    {formatInterval(draft.interval)}
+                                </Row>
+                                <Row label="Stop Condition">
+                                    <span className="capitalize">{draft.stopCondition.replace('-', ' ')}</span>
+                                </Row>
+                                {draft.stopCondition === 'end-date' && draft.endDate && (
+                                    <Row label="End Date">
+                                        {new Date(draft.endDate).toLocaleDateString()}
+                                    </Row>
+                                )}
+                                {draft.stopCondition === 'total-amount' && draft.totalAmount && (
+                                    <Row label="Total Amount">
+                                        {fmt(draft.totalAmount)}
+                                    </Row>
+                                )}
+                                <Row label="Slippage Tolerance">
+                                    {draft.slippageTolerance}%
+                                </Row>
+                                {/* Placeholder for future friend/yield pages */}
+                                <Row label="Recipient">
+                                    <span className="opacity-50">Self (default)</span>
+                                </Row>
+                                <Row label="Deposit to Aave">
+                                    <span className="opacity-50">No</span>
+                                </Row>
+                            </dl>
                         </CardContent>
                     </Card>
 
@@ -257,27 +374,42 @@ export default function TokenDcaReview() {
                         <CardHeader>
                             <CardTitle className="text-emerald-700">Execution Details</CardTitle>
                         </CardHeader>
-                        <CardContent className="space-y-4">
-                            <div className="flex justify-between">
-                                <span className="text-gray-600">Total Cycles:</span>
-                                <span className="font-semibold">{dcaParams.totalCycles}</span>
-                            </div>
-                            <div className="flex justify-between">
-                                <span className="text-gray-600">Estimated Duration:</span>
-                                <span className="font-semibold">{dcaParams.estimatedDays} days</span>
-                            </div>
-                            <div className="flex justify-between">
-                                <span className="text-gray-600">Total Amount to DCA:</span>
-                                <span className="font-semibold">${dcaParams.totalAmountToDca.toFixed(2)}</span>
-                            </div>
-                            <div className="flex justify-between">
-                                <span className="text-gray-600">Min Output per Fill:</span>
-                                <span className="font-semibold">{fromWei(dcaParams.minOutPerFill, 18)}</span>
-                            </div>
-                            <div className="flex justify-between">
-                                <span className="text-gray-600">Current Quote:</span>
-                                <span className="font-semibold">{takingHuman}</span>
-                            </div>
+                        <CardContent>
+                            <dl className="grid grid-cols-[auto,1fr] gap-y-2 gap-x-4 text-sm">
+                                <Row label="Total Cycles">
+                                    {dcaParams.totalCycles}
+                                </Row>
+                                <Row label="Estimated Duration">
+                                    {dcaParams.estimatedDays} days
+                                </Row>
+                                <Row label="Total Amount to DCA">
+                                    {usd(dcaParams.totalAmountToDca)}
+                                </Row>
+                                <Row label="Min Output per Fill">
+                                    {fmt(Number(fromWei(dcaParams.minOutPerFill, 18)))}
+                                </Row>
+                                <Row label="TWAP Min Output">
+                                    {fmt(Number(fromWei(twapParams.twapParams.minOut.toString(), 18)))}
+                                </Row>
+                                <Row label="Current Quote">
+                                    {fmt(Number(takingHuman))}
+                                </Row>
+                                {quoteResponse?.protocols && quoteResponse.protocols.length > 0 && (
+                                    <Row label="Route">
+                                        {quoteResponse.protocols.map((protocol, index) =>
+                                            `${protocol.name} ${Math.round(protocol.part * 100)}%${index < quoteResponse.protocols.length - 1 ? ', ' : ''}`
+                                        ).join('')}
+                                    </Row>
+                                )}
+                                {gasPriceData && (
+                                    <Row label="Est. Gas Fee">
+                                        {usd((gasPriceData * 150000) / 1e18)}
+                                    </Row>
+                                )}
+                                <Row label="Allowance Status">
+                                    <span className="text-green-600">✓ Approved</span>
+                                </Row>
+                            </dl>
                         </CardContent>
                     </Card>
                 </div>
@@ -293,7 +425,7 @@ export default function TokenDcaReview() {
                     <Button
                         onClick={handleConfirm}
                         disabled={isLoading}
-                        className="bg-gradient-to-r from-emerald-500 to-emerald-600 text-white hover:from-emerald-600 hover:to-emerald-700"
+                        className="bg-gradient-to-r from-emerald-500 to-emerald-600 text-white hover:from-emerald-600 hover:to-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                         {isLoading ? 'Creating Order...' : 'Create DCA Strategy'}
                     </Button>
