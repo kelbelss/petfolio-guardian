@@ -300,3 +300,32 @@ BEGIN
     AND f.metadata->>'signature' IS NOT NULL;
 END;
 $$ LANGUAGE plpgsql; 
+
+-- Health Records Table
+CREATE TABLE IF NOT EXISTS health_records (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    wallet_address TEXT NOT NULL UNIQUE,
+    current_health DECIMAL(3,1) NOT NULL DEFAULT 8.0,
+    last_fed_time TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    last_health_update TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    health_history JSONB DEFAULT '[]'::jsonb,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Index for wallet address lookups
+CREATE INDEX IF NOT EXISTS idx_health_records_wallet_address ON health_records(wallet_address);
+
+-- Trigger to update updated_at timestamp
+CREATE OR REPLACE FUNCTION update_health_records_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_update_health_records_updated_at
+    BEFORE UPDATE ON health_records
+    FOR EACH ROW
+    EXECUTE FUNCTION update_health_records_updated_at(); 

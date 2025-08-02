@@ -9,6 +9,7 @@ import HealthTracking from '@/components/HealthTracking';
 import { useAccount, useWalletClient } from 'wagmi';
 import { useToast } from '@/components/ui/use-toast';
 import { useUser, useUpdateUser, useCreateUser, useUserFeeds } from '@/hooks/useSupabase';
+import type { Feed } from '@/lib/supabase';
 import PortfolioSection from '@/components/PortfolioSection';
 
 export default function Dashboard() {
@@ -22,8 +23,7 @@ export default function Dashboard() {
     const user = userData?.data;
     const [hippoName, setHippoName] = React.useState<string>('');
     const {
-        getHippoImage,
-        clearPetState
+        getHippoImage
     } = usePetState();
 
     // Update local state when user data changes or wallet disconnects
@@ -31,7 +31,6 @@ export default function Dashboard() {
         if (!address) {
             // Clear everything when wallet disconnects
             setHippoName('');
-            clearPetState();
             return;
         }
 
@@ -145,40 +144,17 @@ export default function Dashboard() {
                         {/* Vitals Bar Row */}
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                             <div className="md:col-span-2">
-                                <VitalCard icon="⚕️" title="Health" value={<PetHappinessBar />} />
+                                <VitalCard icon="⚕️" title="Health" value={<PetHappinessBar feedsData={feedsData} />} />
                             </div>
                             <VitalCard icon="🍽️" title="Hunger" value={<Countdown feedsData={feedsData} />} />
-                            <VitalCard icon="⏰" title="Last feed" value={<LastFeedTime feedsData={feedsData} userTimezone={user?.timezone} />} />
+                            <VitalCard icon="⏰" title="Last feed" value={<LastFeedTime feedsData={feedsData} />} />
                         </div>
 
                         {/* Feed Now Section */}
                         <FeedNowSection navigate={navigate} />
 
                         {/* Active DCA Feeds Widget */}
-                        <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200">
-                            <CardHeader>
-                                <CardTitle className="flex items-center justify-between text-blue-700">
-                                    <div className="flex items-center gap-3">📊 Your Active DCA Feeds</div>
-                                    <Link
-                                        to="/dca/feeds"
-                                        className="text-sm font-normal text-blue-600 hover:text-blue-800 underline"
-                                    >
-                                        View all feeds & history
-                                    </Link>
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="text-center py-6">
-                                    <p className="text-gray-500 mb-4">No active feeds</p>
-                                    <Link
-                                        to="/dca/setup"
-                                        className="inline-block bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm"
-                                    >
-                                        Create one now
-                                    </Link>
-                                </div>
-                            </CardContent>
-                        </Card>
+                        <ActiveDCAFeeds feedsData={feedsData} />
 
                         {/* Portfolio Section */}
                         <PortfolioSection address={address} user={user} />
@@ -394,14 +370,14 @@ function VitalCard({
     );
 }
 
-function Countdown({ feedsData }: { feedsData: any }) {
+function Countdown({ feedsData }: { feedsData: { data: Feed[] | null } | undefined }) {
     const getNextFeedTime = () => {
         if (!feedsData?.data || feedsData.data.length === 0) {
             return 'No recurring feeds set';
         }
 
         // Find active recurring feeds (DCA feeds)
-        const activeDCAFeeds = feedsData.data.filter((feed: any) =>
+        const activeDCAFeeds = feedsData.data.filter((feed: Feed) =>
             feed.feed_type === 'recurring' && feed.status === 'active'
         );
 
@@ -411,9 +387,9 @@ function Countdown({ feedsData }: { feedsData: any }) {
 
         // Find the next feed time from all active DCA feeds
         const now = Date.now();
-        let nextFeedTime = null;
+        let nextFeedTime: number | null = null;
 
-        activeDCAFeeds.forEach((feed: any) => {
+        activeDCAFeeds.forEach((feed: Feed) => {
             if (feed.next_fill_time) {
                 const nextTime = new Date(feed.next_fill_time).getTime();
                 if (nextTime > now && (!nextFeedTime || nextTime < nextFeedTime)) {
@@ -463,34 +439,97 @@ function Countdown({ feedsData }: { feedsData: any }) {
     );
 }
 
-function PetHappinessBar() {
-    const { health, healthPercentage } = usePetState();
+function PetHappinessBar({ feedsData }: { feedsData: { data: Feed[] | null } | undefined }) {
+    // Calculate health based on real swap data
+    const healthData = React.useMemo(() => {
+        if (!feedsData?.data || feedsData.data.length === 0) {
+            return {
+                health: 8.0,
+                healthPercentage: 80
+            };
+        }
+
+        const feeds = feedsData.data;
+        let totalHealth = 8.0; // Starting health
+        let lastFedTime: number | null = null;
+
+        // Process each feed to calculate health
+        feeds.forEach((feed: Feed) => {
+            const createdAt = new Date(feed.created_at).getTime();
+
+            // Feed creation event
+            totalHealth += 0.5;
+            lastFedTime = Math.max(lastFedTime || 0, createdAt);
+
+            // Bot execution events
+            if (feed.bot_execution_count > 0) {
+                totalHealth += feed.bot_execution_count * 0.5;
+                // Approximate execution times
+                for (let i = 0; i < feed.bot_execution_count; i++) {
+                    const executionTime = createdAt + (i * feed.period * 1000);
+                    lastFedTime = Math.max(lastFedTime, executionTime);
+                }
+            }
+
+            // Handle feed status changes
+            if (feed.status === 'completed') {
+                totalHealth += 1.0;
+                lastFedTime = Math.max(lastFedTime, createdAt);
+            } else if (feed.status === 'failed') {
+                totalHealth -= 1.0;
+                lastFedTime = Math.max(lastFedTime, createdAt);
+            }
+        });
+
+        // Apply decay if there's a last fed time
+        if (lastFedTime) {
+            const now = Date.now();
+            const timeSinceLastFed = now - lastFedTime;
+            const decayInterval = 6 * 60 * 60 * 1000; // 6 hours in ms
+            const decayAmount = 0.5; // 0.5 health points per decay cycle
+            const decayCycles = Math.floor(timeSinceLastFed / decayInterval);
+
+            if (decayCycles > 0) {
+                const totalDecay = decayCycles * decayAmount;
+                totalHealth = Math.max(0, totalHealth - totalDecay);
+            }
+        }
+
+        // Cap health between 0 and 10
+        totalHealth = Math.max(0, Math.min(10, totalHealth));
+        const healthPercentage = (totalHealth / 10) * 100;
+
+        return {
+            health: totalHealth,
+            healthPercentage
+        };
+    }, [feedsData]);
 
     // Determine color based on health level
     let barColor = 'bg-emerald-400'; // Default green
-    if (health <= 3) {
+    if (healthData.health <= 3) {
         barColor = 'bg-red-500'; // Red for hungry (0-3 health)
-    } else if (health <= 6) {
+    } else if (healthData.health <= 6) {
         barColor = 'bg-yellow-500'; // Yellow for neutral (4-6 health)
     }
 
     return (
         <div className="space-y-2">
             <div className="h-4 rounded bg-gray-200 overflow-hidden relative">
-                <div className={`h-full ${barColor} transition-all duration-300`} style={{ width: `${healthPercentage}%` }}></div>
+                <div className={`h-full ${barColor} transition-all duration-300`} style={{ width: `${healthData.healthPercentage}%` }}></div>
                 <div className="absolute inset-0 flex items-center justify-between px-2">
-                    <span className="text-xs text-gray-700 font-bold">0</span>
+                    <span className="text-xs text-gray-700 font-bold">{healthData.health % 1 === 0 ? healthData.health.toFixed(0) : healthData.health.toFixed(1)}</span>
                     <span className="text-xs text-gray-700 font-bold">10</span>
                 </div>
             </div>
             <div className="text-center">
-                <span className="text-xs font-mono text-gray-600">{health.toFixed(1)}/10</span>
+                <span className="text-xs font-mono text-gray-600">{healthData.health % 1 === 0 ? healthData.health.toFixed(0) : healthData.health.toFixed(1)}/10</span>
             </div>
         </div>
     );
 }
 
-function LastFeedTime({ feedsData, userTimezone }: { feedsData: any, userTimezone?: string }) {
+function LastFeedTime({ feedsData }: { feedsData: { data: Feed[] | null } | undefined }) {
     // Get the most recent swap from Supabase
     const getLastFeedTime = () => {
         if (!feedsData?.data || feedsData.data.length === 0) {
@@ -498,7 +537,7 @@ function LastFeedTime({ feedsData, userTimezone }: { feedsData: any, userTimezon
         }
 
         // Find the most recent swap (completed feeds)
-        const completedSwaps = feedsData.data.filter((feed: any) =>
+        const completedSwaps = feedsData.data.filter((feed: Feed) =>
             feed.feed_type === 'swap' && feed.status === 'completed'
         );
 
@@ -507,12 +546,11 @@ function LastFeedTime({ feedsData, userTimezone }: { feedsData: any, userTimezon
         }
 
         // Sort by created_at and get the most recent
-        const mostRecent = completedSwaps.sort((a: any, b: any) =>
+        const mostRecent = completedSwaps.sort((a: Feed, b: Feed) =>
             new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
         )[0];
 
         const timestamp = new Date(mostRecent.created_at).getTime();
-        const timezone = userTimezone || 'Asia/Dubai';
 
         // Calculate time difference
         const now = Date.now();
@@ -544,6 +582,109 @@ function LastFeedTime({ feedsData, userTimezone }: { feedsData: any, userTimezon
                 {getLastFeedTime()}
             </span>
         </div>
+    );
+}
+
+function ActiveDCAFeeds({ feedsData }: { feedsData: { data: Feed[] | null } | undefined }) {
+    // Filter for active recurring feeds only
+    const activeFeeds = React.useMemo(() => {
+        if (!feedsData?.data) return [];
+        return feedsData.data.filter((feed: Feed) =>
+            feed.feed_type === 'recurring' && feed.status === 'active'
+        );
+    }, [feedsData]);
+
+    const formatInterval = (period: number) => {
+        const hours = period / 3600;
+        if (hours < 1) return `${period / 60} minutes`;
+        if (hours < 24) return `${hours} hours`;
+        if (hours < 168) return `${hours / 24} days`;
+        return `${hours / 168} weeks`;
+    };
+
+    const getNextFeedTime = (feed: Feed) => {
+        if (!feed.next_fill_time) return 'Unknown';
+        const nextTime = new Date(feed.next_fill_time).getTime();
+        const now = Date.now();
+        const diff = nextTime - now;
+
+        if (diff <= 0) return 'Ready now';
+
+        const minutes = Math.floor(diff / 60000);
+        const hours = Math.floor(minutes / 60);
+        const days = Math.floor(hours / 24);
+
+        if (days > 0) return `${days} day${days !== 1 ? 's' : ''}`;
+        if (hours > 0) return `${hours} hour${hours !== 1 ? 's' : ''}`;
+        return `${minutes} minute${minutes !== 1 ? 's' : ''}`;
+    };
+
+    return (
+        <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-200">
+            <CardHeader>
+                <CardTitle className="flex items-center justify-between text-blue-700">
+                    <div className="flex items-center gap-3">📊 Your Active DCA Feeds</div>
+                    <Link
+                        to="/dca/feeds"
+                        className="text-sm font-normal text-blue-600 hover:text-blue-800 underline"
+                    >
+                        View all feeds & history
+                    </Link>
+                </CardTitle>
+            </CardHeader>
+            <CardContent>
+                {activeFeeds.length === 0 ? (
+                    <div className="text-center py-6">
+                        <p className="text-gray-500 mb-4">No active feeds</p>
+                        <Link
+                            to="/dca/setup"
+                            className="inline-block bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm"
+                        >
+                            Create one now
+                        </Link>
+                    </div>
+                ) : (
+                    <div className="space-y-4">
+                        {activeFeeds.map((feed: Feed) => (
+                            <div key={feed.id} className="bg-white rounded-lg p-4 border border-blue-200 shadow-sm">
+                                <div className="flex justify-between items-start mb-3">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                                            <span className="text-blue-600 font-bold">DCA</span>
+                                        </div>
+                                        <div>
+                                            <h4 className="font-semibold text-gray-900">
+                                                {feed.src_token_symbol} → {feed.dst_token_symbol}
+                                            </h4>
+                                            <p className="text-sm text-gray-600">
+                                                {feed.chunk_size} {feed.src_token_symbol} every {formatInterval(feed.period)}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="text-right">
+                                        <div className="text-sm font-medium text-blue-600">
+                                            Next: {getNextFeedTime(feed)}
+                                        </div>
+                                        <div className="text-xs text-gray-500">
+                                            {feed.bot_execution_count} executions
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="flex justify-between items-center text-sm">
+                                    <div className="text-gray-600">
+                                        <span className="font-medium">Status:</span> Active
+                                    </div>
+                                    <div className="text-gray-600">
+                                        <span className="font-medium">Created:</span> {new Date(feed.created_at).toLocaleDateString()}
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </CardContent>
+        </Card>
     );
 }
 

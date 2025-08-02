@@ -71,6 +71,17 @@ export interface BotExecution {
   execution_metadata: any;
 }
 
+export interface HealthRecord {
+  id: string;
+  wallet_address: string;
+  current_health: number;
+  last_fed_time: string;
+  last_health_update: string;
+  health_history: any[];
+  created_at: string;
+  updated_at: string;
+}
+
 // Supabase service class
 export class SupabaseService {
   private supabase;
@@ -251,6 +262,185 @@ export class SupabaseService {
       .eq('wallet_address', walletAddress);
 
     return { data, error };
+  }
+
+  // Health management
+  async getHealthRecord(walletAddress: string): Promise<{ data: HealthRecord | null; error: any }> {
+    const { data, error } = await this.supabase
+      .from('health_records')
+      .select('*')
+      .eq('wallet_address', walletAddress)
+      .single();
+
+    return { data, error };
+  }
+
+  async createHealthRecord(healthData: Omit<HealthRecord, 'id' | 'created_at' | 'updated_at'>): Promise<{ data: HealthRecord | null; error: any }> {
+    const { data, error } = await this.supabase
+      .from('health_records')
+      .insert(healthData)
+      .select()
+      .single();
+
+    return { data, error };
+  }
+
+  async updateHealthRecord(walletAddress: string, updates: Partial<HealthRecord>): Promise<{ data: HealthRecord | null; error: any }> {
+    const { data, error } = await this.supabase
+      .from('health_records')
+      .update(updates)
+      .eq('wallet_address', walletAddress)
+      .select()
+      .single();
+
+    return { data, error };
+  }
+
+  async calculateAndUpdateHealth(walletAddress: string): Promise<{ data: HealthRecord | null; error: any }> {
+    // First, get all user feeds
+    const { data: feeds, error: feedsError } = await this.getUserFeeds(walletAddress);
+    if (feedsError) return { data: null, error: feedsError };
+
+    // Get current health record
+    const { data: currentHealth, error: healthError } = await this.getHealthRecord(walletAddress);
+    
+    let healthRecord: HealthRecord;
+    const now = new Date().toISOString();
+
+    if (!currentHealth) {
+      // Create new health record
+      healthRecord = {
+        id: '',
+        wallet_address: walletAddress,
+        current_health: 8.0,
+        last_fed_time: now,
+        last_health_update: now,
+        health_history: [],
+        created_at: now,
+        updated_at: now
+      };
+    } else {
+      healthRecord = currentHealth;
+    }
+
+    // Calculate health based on feeds
+    let totalHealth = 8.0;
+    let lastFedTime = new Date(healthRecord.last_fed_time).getTime();
+    const healthHistory: any[] = [];
+
+    if (feeds) {
+      feeds.forEach(feed => {
+        const createdAt = new Date(feed.created_at).getTime();
+        
+        // Feed creation - differentiate between instant swaps and DCA feeds
+        if (feed.feed_type === 'swap') {
+          // Instant swap - give +1.0 health
+          totalHealth += 1.0;
+          lastFedTime = Math.max(lastFedTime, createdAt);
+          healthHistory.push({
+            timestamp: createdAt,
+            healthChange: 1.0,
+            reason: 'Instant swap',
+            details: `${feed.src_token_symbol} → ${feed.dst_token_symbol}`
+          });
+        } else {
+          // DCA feed creation - give +0.5 health
+          totalHealth += 0.5;
+          lastFedTime = Math.max(lastFedTime, createdAt);
+          healthHistory.push({
+            timestamp: createdAt,
+            healthChange: 0.5,
+            reason: 'Created DCA feed',
+            details: `${feed.src_token_symbol} → ${feed.dst_token_symbol}`
+          });
+        }
+
+        // Bot executions
+        if (feed.bot_execution_count > 0) {
+          for (let i = 0; i < feed.bot_execution_count; i++) {
+            const executionTime = createdAt + (i * feed.period * 1000);
+            totalHealth += 0.5;
+            lastFedTime = Math.max(lastFedTime, executionTime);
+            healthHistory.push({
+              timestamp: executionTime,
+              healthChange: 0.5,
+              reason: 'DCA feed executed',
+              details: `${feed.src_token_symbol} → ${feed.dst_token_symbol}`
+            });
+          }
+        }
+
+        // Status changes
+        if (feed.status === 'completed') {
+          totalHealth += 1.0;
+          lastFedTime = Math.max(lastFedTime, createdAt);
+          healthHistory.push({
+            timestamp: createdAt,
+            healthChange: 1.0,
+            reason: 'Feed completed successfully',
+            details: `${feed.feed_type} feed finished`
+          });
+        } else if (feed.status === 'failed') {
+          totalHealth -= 1.0;
+          lastFedTime = Math.max(lastFedTime, createdAt);
+          healthHistory.push({
+            timestamp: createdAt,
+            healthChange: -1.0,
+            reason: 'Feed failed',
+            details: `${feed.feed_type} feed encountered an error`
+          });
+        }
+      });
+    }
+
+    // Apply decay
+    const currentTime = Date.now();
+    const timeSinceLastFed = currentTime - lastFedTime;
+    const decayInterval = 6 * 60 * 60 * 1000; // 6 hours
+    const decayCycles = Math.floor(timeSinceLastFed / decayInterval);
+    
+    if (decayCycles > 0) {
+      const totalDecay = decayCycles * 0.5; // 0.5 points per cycle
+      totalHealth = Math.max(0, totalHealth - totalDecay);
+      
+      // Add decay events
+      for (let i = 0; i < decayCycles; i++) {
+        const decayTime = lastFedTime + (i + 1) * decayInterval;
+        healthHistory.push({
+          timestamp: decayTime,
+          healthChange: -0.5,
+          reason: 'Natural decay',
+          details: 'No food for 6 hours'
+        });
+      }
+    }
+
+    // Cap health between 0 and 10
+    totalHealth = Math.max(0, Math.min(10, totalHealth));
+
+    // Sort history by timestamp (newest first)
+    healthHistory.sort((a, b) => b.timestamp - a.timestamp);
+
+    // Update health record
+    const updates = {
+      current_health: totalHealth,
+      last_fed_time: new Date(lastFedTime).toISOString(),
+      last_health_update: now,
+      health_history: healthHistory,
+      updated_at: now
+    };
+
+    if (!currentHealth) {
+      return this.createHealthRecord({
+        wallet_address: walletAddress,
+        current_health: totalHealth,
+        last_fed_time: new Date(lastFedTime).toISOString(),
+        last_health_update: now,
+        health_history: healthHistory
+      });
+    } else {
+      return this.updateHealthRecord(walletAddress, updates);
+    }
   }
 }
 

@@ -15,25 +15,71 @@ export default function PortfolioSection({ address, user }: PortfolioSectionProp
     const { mutateAsync: removePortfolioToken } = useRemovePortfolioToken();
     const [isTokenModalOpen, setIsTokenModalOpen] = useState(false);
 
-    // Use user's portfolio tokens or default to main tokens
-    const portfolioTokens = user?.portfolio_tokens || [
-        '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE', // ETH
-        '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', // USDC
-        '0x4200000000000000000000000000000000000006'  // WETH
-    ];
+    // Use user's portfolio tokens - only show if user has custom tokens
+    const portfolioTokens = user?.portfolio_tokens || [];
 
+    // Always call hooks at the top level
     const { data: balancesData } = useBalances(address || '', portfolioTokens);
-
-    // Fetch prices for all portfolio tokens using bulk API
     const { data: bulkPrices } = useBulkTokenPrices(portfolioTokens);
-
-
 
     // Convert tokensData to array format (same as TokenSearchModal)
     const allTokens = useMemo(() => {
         if (!tokensData) return [];
         return Object.values(tokensData) as TokenMeta[];
     }, [tokensData]);
+
+    // Only show portfolio if wallet is connected
+    if (!address) {
+        return (
+            <Card className="bg-white border-green-200 shadow-sm">
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-3">
+                        <span className="text-2xl">💰</span>
+                        <span>Portfolio</span>
+                    </CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <div className="text-center py-8 text-gray-500">
+                        Connect your wallet to view your portfolio
+                    </div>
+                </CardContent>
+            </Card>
+        );
+    }
+
+    // If no custom tokens, show empty portfolio
+    if (portfolioTokens.length === 0) {
+        return (
+            <Card className="bg-white border-green-200 shadow-sm">
+                <CardHeader>
+                    <CardTitle className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <span className="text-2xl">💰</span>
+                            <span>Portfolio</span>
+                            <button
+                                onClick={() => setIsTokenModalOpen(true)}
+                                className="ml-2 px-3 py-1 bg-emerald-500 text-white text-sm rounded-lg hover:bg-emerald-600 transition-colors"
+                            >
+                                + Add Token
+                            </button>
+                        </div>
+                    </CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <div className="text-center py-8 text-gray-500">
+                        No tokens in your portfolio yet. Add some tokens to get started!
+                    </div>
+                </CardContent>
+
+                <TokenSearchModal
+                    isOpen={isTokenModalOpen}
+                    onClose={() => setIsTokenModalOpen(false)}
+                    walletAddress={address}
+                    existingTokens={portfolioTokens}
+                />
+            </Card>
+        );
+    }
 
     const getPortfolioData = () => {
 

@@ -179,4 +179,28 @@ export const useBotExecutionAnalytics = (walletAddress: string) => {
     enabled: !!walletAddress,
     staleTime: 1000 * 60 * 5, // 5 minutes
   });
+};
+
+// Health management hooks
+export const useHealthRecord = (walletAddress: string) => {
+  return useQuery({
+    queryKey: ['health-record', walletAddress],
+    queryFn: () => supabaseService.getHealthRecord(walletAddress),
+    enabled: !!walletAddress,
+    staleTime: 1000 * 30, // 30 seconds
+  });
+};
+
+export const useCalculateAndUpdateHealth = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: (walletAddress: string) => 
+      supabaseService.calculateAndUpdateHealth(walletAddress),
+    onSuccess: (data, walletAddress) => {
+      queryClient.invalidateQueries({ 
+        queryKey: ['health-record', walletAddress] 
+      });
+    },
+  });
 }; 
