@@ -177,7 +177,7 @@ export default function TokenInput({
                             onBlur={handleAmountBlur}
                             onKeyDown={handleKeyDown}
                             disabled={disabled}
-                            className="text-base sm:text-lg font-mono h-12 sm:h-10"
+                            className="text-base sm:text-lg font-mono h-12 sm:h-10 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                             aria-busy={isLoading}
                         />
                         {/* Amount USD helper inside input */}
@@ -198,9 +198,6 @@ export default function TokenInput({
                             <span>1 {token?.symbol} ≈ ${tokenPriceUsd.toFixed(2)}</span>
                         ) : (
                             <span aria-busy="true">Price loading…</span>
-                        )}
-                        {token?.address.toLowerCase() === NATIVE_TOKEN.toLowerCase() && (
-                            <span className="text-orange-600">Gas buffer: 0.001 ETH</span>
                         )}
                     </div>
                 </div>

@@ -54,7 +54,7 @@ export default function FeedWizard() {
             interval: existingDraft.interval || 3600,
             stopCondition: existingDraft.stopCondition || 'end-date',
             endDate: existingDraft.endDate ? new Date(existingDraft.endDate) : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-            totalAmount: existingDraft.totalAmount || 100,
+            totalAmount: existingDraft.totalAmount || 0,
         },
     });
 
@@ -265,27 +265,54 @@ export default function FeedWizard() {
                                     )}
                                 />
                                 {errors.endDate && <p className="text-red-500 text-sm mt-2">{errors.endDate.message}</p>}
+
+                                {/* Show calculated total when end date is selected */}
+                                {watchedValues.endDate && watchedValues.chunkIn && watchedValues.interval && fromPriceUsd > 0 && (
+                                    <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
+                                        <div className="flex justify-between items-center">
+                                            <span>Estimated total:</span>
+                                            <span className="font-semibold">≈ ${(() => {
+                                                const endDate = new Date(watchedValues.endDate);
+                                                const now = new Date();
+                                                const totalSeconds = Math.floor((endDate.getTime() - now.getTime()) / 1000);
+                                                const totalCycles = Math.floor(totalSeconds / Number(watchedValues.interval));
+                                                const totalAmount = totalCycles * Number(watchedValues.chunkIn);
+                                                return (totalAmount * fromPriceUsd).toFixed(2);
+                                            })()}</span>
+                                        </div>
+                                        <div className="text-xs text-gray-500 mt-1">
+                                            Based on {Math.floor((new Date(watchedValues.endDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))} days
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
                             <div className={`space-y-3 ${watchedValues.stopCondition !== 'total-amount' ? 'opacity-50 pointer-events-none' : ''}`}>
                                 <Label htmlFor="totalAmount" className="text-sm font-semibold text-gray-700 block">Total Amount to DCA</Label>
-                                <Controller
-                                    name="totalAmount"
-                                    control={control}
-                                    render={({ field }) => (
-                                        <Input
-                                            id="totalAmount"
-                                            type="number"
-                                            min={0.01}
-                                            step={0.01}
-                                            placeholder="0.00"
-                                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors"
-                                            {...field}
-                                            value={field.value === 0 ? '' : field.value}
-                                            onChange={e => field.onChange(Number(e.target.value))}
-                                        />
+                                <div className="relative">
+                                    <Controller
+                                        name="totalAmount"
+                                        control={control}
+                                        render={({ field }) => (
+                                            <Input
+                                                id="totalAmount"
+                                                type="number"
+                                                min={0.01}
+                                                step={0.01}
+                                                placeholder="0.00"
+                                                className="w-full px-4 py-3 pr-20 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors"
+                                                {...field}
+                                                value={field.value === 0 ? '' : field.value}
+                                                onChange={e => field.onChange(Number(e.target.value) || 0)}
+                                            />
+                                        )}
+                                    />
+                                    {watchedValues.totalAmount && fromPriceUsd > 0 && (
+                                        <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-sm text-gray-500">
+                                            ≈ ${(watchedValues.totalAmount * fromPriceUsd).toFixed(2)}
+                                        </div>
                                     )}
-                                />
+                                </div>
                                 {errors.totalAmount && <p className="text-red-500 text-sm mt-2">{errors.totalAmount.message}</p>}
                             </div>
                         </div>
