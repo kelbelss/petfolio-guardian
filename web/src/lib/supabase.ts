@@ -21,6 +21,27 @@ export interface User {
   updated_at: string;
 }
 
+// Type for bot execution errors
+export interface BotExecutionError {
+  timestamp: string;
+  error: string;
+  details?: unknown;
+  retry_count?: number;
+}
+
+// Type for feed metadata
+export interface FeedMetadata {
+  order?: unknown;
+  signature?: unknown;
+  twapParams?: unknown;
+  aaveParams?: {
+    depositToAave: boolean;
+    recipient: string;
+    aavePool: string;
+  };
+  [key: string]: unknown;
+}
+
 export interface Feed {
   id: string;
   user_id?: string;
@@ -42,10 +63,10 @@ export interface Feed {
   total_amount?: number;
   transaction_hash?: string;
   order_hash?: string;
-  metadata: any;
+  metadata: FeedMetadata;
   bot_execution_count: number;
   last_bot_execution?: string;
-  bot_execution_errors: any[];
+  bot_execution_errors: BotExecutionError[];
 }
 
 export interface UserSettings {
@@ -58,6 +79,26 @@ export interface UserSettings {
   updated_at: string;
 }
 
+// Type for health history events
+export interface HealthEvent {
+  timestamp: string;
+  health_change: number;
+  reason: string;
+  details?: unknown;
+}
+
+// Type for bot execution metadata
+export interface BotExecutionMetadata {
+  gas_estimate?: string;
+  slippage_used?: number;
+  price_impact?: number;
+  route_used?: unknown;
+  execution_duration_ms?: number;
+  retry_count?: number;
+  error_details?: unknown;
+  [key: string]: unknown;
+}
+
 export interface BotExecution {
   id: string;
   feed_id: string;
@@ -68,7 +109,7 @@ export interface BotExecution {
   gas_price?: string;
   status: 'success' | 'failed' | 'pending';
   error_message?: string;
-  execution_metadata: any;
+  execution_metadata: BotExecutionMetadata;
 }
 
 export interface HealthRecord {
@@ -77,7 +118,7 @@ export interface HealthRecord {
   current_health: number;
   last_fed_time: string;
   last_health_update: string;
-  health_history: any[];
+  health_history: HealthEvent[];
   created_at: string;
   updated_at: string;
 }
@@ -91,7 +132,7 @@ export class SupabaseService {
   }
 
   // User management
-  async createUser(walletAddress: string, hippoName?: string, timezone?: string): Promise<{ data: User | null; error: any }> {
+  async createUser(walletAddress: string, hippoName?: string, timezone?: string): Promise<{ data: User | null; error: unknown }> {
     const { data, error } = await this.supabase
       .from('users')
       .insert({ 
@@ -105,7 +146,7 @@ export class SupabaseService {
     return { data, error };
   }
 
-  async getUser(walletAddress: string): Promise<{ data: User | null; error: any }> {
+  async getUser(walletAddress: string): Promise<{ data: User | null; error: unknown }> {
     const { data, error } = await this.supabase
       .from('users')
       .select('*')
@@ -116,7 +157,7 @@ export class SupabaseService {
   }
 
   // Feed management
-  async createFeed(feedData: Omit<Feed, 'id' | 'created_at'>): Promise<{ data: Feed | null; error: any }> {
+  async createFeed(feedData: Omit<Feed, 'id' | 'created_at'>): Promise<{ data: Feed | null; error: unknown }> {
     const { data, error } = await this.supabase
       .from('feeds')
       .insert(feedData)
@@ -230,19 +271,167 @@ export class SupabaseService {
     return { data, error };
   }
 
-  // Real-time subscriptions
-  subscribeToUserFeeds(walletAddress: string, callback: (feed: Feed) => void) {
+  // Enhanced feed management for external bot execution
+  async getFeedsForExecution(): Promise<{ data: Feed[] | null; error: any }> {
+    const { data, error } = await this.supabase
+      .from('feeds')
+      .select('*')
+      .eq('feed_type', 'recurring')
+      .eq('status', 'active')
+      .lte('next_fill_time', new Date().toISOString())
+      .not('metadata->order', 'is', null)
+      .not('metadata->signature', 'is', null);
+
+    return { data, error };
+  }
+
+  async updateFeedExecutionStatus(
+    feedId: string, 
+    updates: {
+      status?: 'active' | 'completed' | 'cancelled' | 'failed' | 'executing';
+      next_fill_time?: string;
+      bot_execution_count?: number;
+      last_bot_execution?: string;
+      transaction_hash?: string;
+      bot_execution_errors?: any[];
+      metadata?: any;
+    }
+  ): Promise<{ data: Feed | null; error: any }> {
+    const { data, error } = await this.supabase
+      .from('feeds')
+      .update(updates)
+      .eq('id', feedId)
+      .select()
+      .single();
+
+    return { data, error };
+  }
+
+  // Enhanced bot execution logging with better metadata
+  async logBotExecutionWithMetadata(
+    executionData: Omit<BotExecution, 'id' | 'execution_time'> & {
+      execution_metadata?: {
+        gas_estimate?: string;
+        slippage_used?: number;
+        price_impact?: number;
+        route_used?: any;
+        execution_duration_ms?: number;
+        retry_count?: number;
+        error_details?: any;
+      };
+    }
+  ): Promise<{ data: BotExecution | null; error: any }> {
+    const { data, error } = await this.supabase
+      .from('bot_executions')
+      .insert(executionData)
+      .select()
+      .single();
+
+    return { data, error };
+  }
+
+  // Get feeds that need attention (failed, stuck, etc.)
+  async getFeedsNeedingAttention(): Promise<{ data: Feed[] | null; error: any }> {
+    const { data, error } = await this.supabase
+      .from('feeds')
+      .select('*')
+      .or('status.eq.failed,status.eq.executing')
+      .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()); // Last 24 hours
+
+    return { data, error };
+  }
+
+  // Batch update multiple feeds (for bot efficiency)
+  async batchUpdateFeeds(updates: Array<{ id: string; updates: Partial<Feed> }>): Promise<{ data: Feed[] | null; error: any }> {
+    const { data, error } = await this.supabase
+      .from('feeds')
+      .upsert(
+        updates.map(({ id, updates: feedUpdates }) => ({ id, ...feedUpdates })),
+        { onConflict: 'id' }
+      )
+      .select();
+
+    return { data, error };
+  }
+
+  // Get feed execution history
+  async getFeedExecutionHistory(feedId: string): Promise<{ data: BotExecution[] | null; error: any }> {
+    const { data, error } = await this.supabase
+      .from('bot_executions')
+      .select('*')
+      .eq('feed_id', feedId)
+      .order('execution_time', { ascending: false });
+
+    return { data, error };
+  }
+
+  // Enhanced real-time subscriptions with better error handling
+  subscribeToFeedUpdates(callback: (feed: Feed) => void, errorCallback?: (error: any) => void) {
     return this.supabase
-      .channel('user-feeds')
+      .channel('feed-updates')
       .on('postgres_changes', {
         event: '*',
         schema: 'public',
-        table: 'feeds',
-        filter: `wallet_address=eq.${walletAddress}`
+        table: 'feeds'
       }, (payload) => {
         callback(payload.new as Feed);
       })
+      .on('error', (error) => {
+        console.error('Supabase subscription error:', error);
+        errorCallback?.(error);
+      })
       .subscribe();
+  }
+
+  // Subscribe to bot execution updates
+  subscribeToBotExecutions(callback: (execution: BotExecution) => void, errorCallback?: (error: any) => void) {
+    return this.supabase
+      .channel('bot-executions')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'bot_executions'
+      }, (payload) => {
+        callback(payload.new as BotExecution);
+      })
+      .on('error', (error) => {
+        console.error('Supabase subscription error:', error);
+        errorCallback?.(error);
+      })
+      .subscribe();
+  }
+
+  // Get system health metrics for monitoring
+  async getSystemHealthMetrics(): Promise<{ data: any; error: any }> {
+    const { data: activeFeeds, error: activeError } = await this.supabase
+      .from('feeds')
+      .select('status')
+      .eq('status', 'active');
+
+    const { data: failedFeeds, error: failedError } = await this.supabase
+      .from('feeds')
+      .select('status')
+      .eq('status', 'failed')
+      .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
+
+    const { data: recentExecutions, error: execError } = await this.supabase
+      .from('bot_executions')
+      .select('status')
+      .gte('execution_time', new Date(Date.now() - 60 * 60 * 1000).toISOString()); // Last hour
+
+    if (activeError || failedError || execError) {
+      return { data: null, error: { activeError, failedError, execError } };
+    }
+
+    const metrics = {
+      activeFeeds: activeFeeds?.length || 0,
+      failedFeeds24h: failedFeeds?.length || 0,
+      recentExecutions: recentExecutions?.length || 0,
+      successRate: recentExecutions ? 
+        (recentExecutions.filter(e => e.status === 'success').length / recentExecutions.length) * 100 : 0
+    };
+
+    return { data: metrics, error: null };
   }
 
   // Analytics
@@ -332,7 +521,7 @@ export class SupabaseService {
       feeds.forEach(feed => {
         const createdAt = new Date(feed.created_at).getTime();
         
-        // Feed creation - differentiate between instant swaps and DCA feeds
+        // Feed creation - differentiate between different feed types
         if (feed.feed_type === 'swap') {
           // Instant swap - give +1.0 health
           totalHealth += 1.0;
@@ -343,28 +532,85 @@ export class SupabaseService {
             reason: 'Instant swap',
             details: `${feed.src_token_symbol} → ${feed.dst_token_symbol}`
           });
-        } else {
-          // DCA feed creation - give +0.5 health
-          totalHealth += 0.5;
-          lastFedTime = Math.max(lastFedTime, createdAt);
-          healthHistory.push({
-            timestamp: createdAt,
-            healthChange: 0.5,
-            reason: 'Created DCA feed',
-            details: `${feed.src_token_symbol} → ${feed.dst_token_symbol}`
-          });
+        } else if (feed.feed_type === 'recurring') {
+          // Check for special DCA types based on metadata
+          const isPeerDCA = feed.metadata?.feedType === 'peer-dca';
+          const isDCAYield = feed.metadata?.feedType === 'dca-yield';
+          const isCustomYield = feed.metadata?.feedType === 'custom-yield';
+          
+          if (isPeerDCA) {
+            // Peer DCA - give +0.5 base + 3.0 for referral (placeholder for now)
+            totalHealth += 3.5;
+            lastFedTime = Math.max(lastFedTime, createdAt);
+            healthHistory.push({
+              timestamp: createdAt,
+              healthChange: 3.5,
+              reason: 'Created Peer DCA feed',
+              details: `${feed.src_token_symbol} → ${feed.dst_token_symbol} (Social bonus + referral)`
+            });
+          } else if (isDCAYield) {
+            // DCA Yield - give +1.0 for creation
+            totalHealth += 1.0;
+            lastFedTime = Math.max(lastFedTime, createdAt);
+            healthHistory.push({
+              timestamp: createdAt,
+              healthChange: 1.0,
+              reason: 'Created DCA Yield feed',
+              details: `${feed.src_token_symbol} → ${feed.dst_token_symbol}`
+            });
+          } else if (isCustomYield) {
+            // Custom Yield Strategy - give +0.5 for now (placeholder)
+            totalHealth += 0.5;
+            lastFedTime = Math.max(lastFedTime, createdAt);
+            healthHistory.push({
+              timestamp: createdAt,
+              healthChange: 0.5,
+              reason: 'Created Custom Yield Strategy',
+              details: `${feed.src_token_symbol} → ${feed.dst_token_symbol}`
+            });
+          } else {
+            // Regular DCA feed creation - give +0.5 health
+            totalHealth += 0.5;
+            lastFedTime = Math.max(lastFedTime, createdAt);
+            healthHistory.push({
+              timestamp: createdAt,
+              healthChange: 0.5,
+              reason: 'Created DCA feed',
+              details: `${feed.src_token_symbol} → ${feed.dst_token_symbol}`
+            });
+          }
         }
 
         // Bot executions
         if (feed.bot_execution_count > 0) {
           for (let i = 0; i < feed.bot_execution_count; i++) {
             const executionTime = createdAt + (i * feed.period * 1000);
-            totalHealth += 0.5;
+            
+            // Check for special DCA types
+            const isPeerDCA = feed.metadata?.feedType === 'peer-dca';
+            const isDCAYield = feed.metadata?.feedType === 'dca-yield';
+            const isCustomYield = feed.metadata?.feedType === 'custom-yield';
+            
+            let executionHealth = 0.5; // Default for regular DCA
+            let executionReason = 'DCA feed executed';
+            
+            if (isPeerDCA) {
+              executionHealth = 0.5; // Same as regular DCA for now
+              executionReason = 'Peer DCA feed executed';
+            } else if (isDCAYield) {
+              executionHealth = 2.0; // +2.0 per execution for DCA Yield
+              executionReason = 'DCA Yield feed executed';
+            } else if (isCustomYield) {
+              executionHealth = 0.5; // Same as regular DCA for now
+              executionReason = 'Custom Yield Strategy executed';
+            }
+            
+            totalHealth += executionHealth;
             lastFedTime = Math.max(lastFedTime, executionTime);
             healthHistory.push({
               timestamp: executionTime,
-              healthChange: 0.5,
-              reason: 'DCA feed executed',
+              healthChange: executionHealth,
+              reason: executionReason,
               details: `${feed.src_token_symbol} → ${feed.dst_token_symbol}`
             });
           }

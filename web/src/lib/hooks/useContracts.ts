@@ -1,4 +1,4 @@
-import { CONTRACT_ADDRESSES, COMMON_TOKENS } from '../constants';
+import { CONTRACT_ADDRESSES, COMMON_TOKENS } from '@/lib/constants';
 
 // Helper to check if token is ETH
 export function isEthToken(tokenAddress: string): boolean {

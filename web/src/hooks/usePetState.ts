@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { useAccount } from 'wagmi';
 import { formatRelativeTimeWithTimezone } from '@/lib/format';
+import { useHealthRecord, useCalculateAndUpdateHealth } from '@/hooks/useSupabase';
 
 export interface OrderMeta {
   orderHash: string;
@@ -49,223 +50,62 @@ const MOOD_THRESHOLDS = {
 
 export function usePetState() {
   const { address } = useAccount();
-  const [petState, setPetState] = useState<PetState>({
-    health: GAME_CONSTANTS.STARTING_HEALTH,
-    lastFed: null,
-    mood: 'happy',
-    healthHistory: []
-  });
+  const { data: healthRecordData } = useHealthRecord(address || '');
+  const { mutateAsync: calculateAndUpdateHealth } = useCalculateAndUpdateHealth();
 
-  // Get storage key for this user
-  const getStorageKey = () => `petState_${address}`;
+  // Get health data from Supabase
+  const healthData = healthRecordData?.data;
 
-  // Clear pet state (for logout)
-  const clearPetState = () => {
-    if (address) {
-      const key = getStorageKey();
-      localStorage.removeItem(key);
-    }
-  };
-
-  // Reset pet state to initial (for clearing fake data)
-  const resetPetState = () => {
-    const initialState: PetState = {
-      health: GAME_CONSTANTS.STARTING_HEALTH,
-      lastFed: null,
-      mood: 'happy',
-      healthHistory: []
-    };
-    setPetState(initialState);
-    if (address) {
-      savePetState(initialState);
-    }
-  };
-
-  // Load pet state from localStorage
-  const loadPetState = (): PetState => {
-    if (!address) {
-      return {
-        health: GAME_CONSTANTS.STARTING_HEALTH,
-        lastFed: null,
-        mood: 'happy',
-        healthHistory: []
-      };
-    }
-
-    const key = getStorageKey();
-    const saved = localStorage.getItem(key);
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        return {
-          health: parsed.health ?? GAME_CONSTANTS.STARTING_HEALTH,
-          lastFed: parsed.lastFed ?? null,
-          mood: parsed.mood ?? 'happy',
-          healthHistory: parsed.healthHistory ?? []
-        };
-      } catch {
-        console.error('Failed to parse pet state from localStorage');
-      }
-    }
-    
-    // Initialize new user with starting health - NO FAKE DATA
-    const initialState: PetState = {
-      health: GAME_CONSTANTS.STARTING_HEALTH,
-      lastFed: null,
-      mood: 'happy',
-      healthHistory: []
-    };
-    
-    return initialState;
-  };
-
-  // Save pet state to localStorage
-  const savePetState = (state: PetState) => {
-    if (!address) return; // Don't save if no wallet connected
-    
-    const key = getStorageKey();
-    localStorage.setItem(key, JSON.stringify(state));
-  };
-
-  // Add health event to history
-  const addHealthEvent = (healthChange: number, reason: string, details?: string) => {
-    const event: HealthEvent = {
-      timestamp: Date.now(),
-      healthChange,
-      reason,
-      details
-    };
-
-    setPetState(prev => {
-      const newState = {
-        ...prev,
-        healthHistory: [event, ...prev.healthHistory]
-      };
-      savePetState(newState);
-      return newState;
-    });
-  };
-
-  // Calculate mood based on health
+  // Calculate mood based on Supabase health data
   const calculateMood = (health: number): 'hungry' | 'neutral' | 'happy' => {
     if (health <= MOOD_THRESHOLDS.HUNGRY.max) return 'hungry';
     if (health <= MOOD_THRESHOLDS.NEUTRAL.max) return 'neutral';
     return 'happy';
   };
 
-  // Apply natural decay
-  const applyDecay = (state: PetState): PetState => {
-    if (!state.lastFed) return state;
+  // Get current pet state from Supabase
+  const petState: PetState = {
+    health: healthData?.current_health ?? GAME_CONSTANTS.STARTING_HEALTH,
+    lastFed: healthData?.last_fed_time ? new Date(healthData.last_fed_time).getTime() : null,
+    mood: calculateMood(healthData?.current_health ?? GAME_CONSTANTS.STARTING_HEALTH),
+    healthHistory: healthData?.health_history ?? []
+  };
 
-    const now = Date.now();
-    const timeSinceLastFed = now - state.lastFed;
-    const decayCycles = Math.floor(timeSinceLastFed / GAME_CONSTANTS.DECAY_INTERVAL);
-    
-    if (decayCycles > 0) {
-      const totalDecay = decayCycles * GAME_CONSTANTS.DECAY_AMOUNT;
-      const newHealth = Math.max(0, state.health - totalDecay);
-      
-      // Add decay events to history
-      const newHistory = [...state.healthHistory];
-      for (let i = 0; i < decayCycles; i++) {
-        newHistory.unshift({
-          timestamp: state.lastFed + (i + 1) * GAME_CONSTANTS.DECAY_INTERVAL,
-          healthChange: -GAME_CONSTANTS.DECAY_AMOUNT,
-          reason: 'Natural decay',
-          details: 'No food for 6 hours'
-        });
-      }
-
-      return {
-        ...state,
-        health: newHealth,
-        mood: calculateMood(newHealth),
-        healthHistory: newHistory
-      };
+  // Clear pet state (for logout) - now just triggers health recalculation
+  const clearPetState = () => {
+    if (address) {
+      calculateAndUpdateHealth(address);
     }
-
-    return state;
   };
 
-  // Feed pet (instant swap)
-  const feedInstantSwap = (tokenPair?: string) => {
-    setPetState(prev => {
-      const decayedState = applyDecay(prev);
-      const newHealth = Math.min(
-        GAME_CONSTANTS.MAX_HEALTH, 
-        decayedState.health + GAME_CONSTANTS.FEEDING_REWARDS.INSTANT_SWAP
-      );
-      
-      const newState = {
-        ...decayedState,
-        health: newHealth,
-        lastFed: Date.now(),
-        mood: calculateMood(newHealth)
-      };
-
-      addHealthEvent(
-        GAME_CONSTANTS.FEEDING_REWARDS.INSTANT_SWAP,
-        'Instant swap',
-        tokenPair ? `Swapped ${tokenPair}` : undefined
-      );
-
-      savePetState(newState);
-      return newState;
-    });
+  // Reset pet state to initial (for clearing fake data)
+  const resetPetState = () => {
+    if (address) {
+      calculateAndUpdateHealth(address);
+    }
   };
 
-  // Feed pet (DCA creation)
-  const feedDCACreation = (orderHash: string, tokenPair?: string) => {
-    setPetState(prev => {
-      const decayedState = applyDecay(prev);
-      const newHealth = Math.min(
-        GAME_CONSTANTS.MAX_HEALTH, 
-        decayedState.health + GAME_CONSTANTS.FEEDING_REWARDS.DCA_CREATION
-      );
-      
-      const newState = {
-        ...decayedState,
-        health: newHealth,
-        lastFed: Date.now(),
-        mood: calculateMood(newHealth)
-      };
 
-      addHealthEvent(
-        GAME_CONSTANTS.FEEDING_REWARDS.DCA_CREATION,
-        'DCA order created',
-        tokenPair ? `Created ${tokenPair} DCA` : undefined
-      );
 
-      savePetState(newState);
-      return newState;
-    });
+  // Feed pet (instant swap) - now triggers Supabase update
+  const feedInstantSwap = (_tokenPair?: string) => {
+    if (address) {
+      calculateAndUpdateHealth(address);
+    }
   };
 
-  // Feed pet (DCA fill)
-  const feedDCAFill = (orderHash: string, tokenPair?: string) => {
-    setPetState(prev => {
-      const decayedState = applyDecay(prev);
-      const newHealth = Math.min(
-        GAME_CONSTANTS.MAX_HEALTH, 
-        decayedState.health + GAME_CONSTANTS.FEEDING_REWARDS.DCA_FILL
-      );
-      
-      const newState = {
-        ...decayedState,
-        health: newHealth,
-        lastFed: Date.now(),
-        mood: calculateMood(newHealth)
-      };
+  // Feed pet (DCA creation) - now triggers Supabase update
+  const feedDCACreation = (_orderHash: string, _tokenPair?: string) => {
+    if (address) {
+      calculateAndUpdateHealth(address);
+    }
+  };
 
-      addHealthEvent(
-        GAME_CONSTANTS.FEEDING_REWARDS.DCA_FILL,
-        'DCA order filled',
-        tokenPair ? `Filled ${tokenPair} DCA` : undefined
-      );
-
-      savePetState(newState);
-      return newState;
-    });
+  // Feed pet (DCA fill) - now triggers Supabase update
+  const feedDCAFill = (_orderHash: string, _tokenPair?: string) => {
+    if (address) {
+      calculateAndUpdateHealth(address);
+    }
   };
 
   // Get time until next decay
@@ -311,81 +151,21 @@ export function usePetState() {
     }
   };
 
-  // Debug function to check localStorage data
-
-
-  // Fix corrupted timestamp data
+  // Fix corrupted timestamp data - now triggers Supabase recalculation
   const fixCorruptedTimestamps = () => {
     if (address) {
-      const key = getStorageKey();
-      const saved = localStorage.getItem(key);
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved);
-          let needsUpdate = false;
-          
-          // Check if lastFed timestamp is in the future (corrupted)
-          if (parsed.lastFed && parsed.lastFed > Date.now()) {
-
-          }
-          
-          // Check health history for corrupted timestamps
-          if (parsed.healthHistory && Array.isArray(parsed.healthHistory)) {
-            parsed.healthHistory = parsed.healthHistory.filter((event: any) => {
-              if (event.timestamp && event.timestamp > Date.now()) {
-
-                return false;
-              }
-              return true;
-            });
-            needsUpdate = true;
-          }
-          
-          if (needsUpdate) {
-            localStorage.setItem(key, JSON.stringify(parsed));
-            setPetState(parsed);
-
-          }
-        } catch (e) {
-          console.error('Failed to fix timestamps:', e);
-        }
-      }
+      calculateAndUpdateHealth(address);
     }
   };
 
-  // Initialize pet state
+  // Initialize pet state - now uses Supabase data automatically
   useEffect(() => {
-    if (address) {
-      const loadedState = loadPetState();
-      setPetState(loadedState);
-    } else {
-      // Reset to initial state when wallet disconnects
-      setPetState({
-        health: GAME_CONSTANTS.STARTING_HEALTH,
-        lastFed: null,
-        mood: 'happy',
-        healthHistory: []
-      });
-    }
+    // Health data is automatically loaded from Supabase via useHealthRecord
   }, [address]);
 
-  // Update pet state every second for real-time updates
+  // Update pet state - now handled by Supabase real-time updates
   useEffect(() => {
-    if (!address) return;
-
-    const updatePetState = () => {
-      setPetState(prev => {
-        const decayedState = applyDecay(prev);
-        if (decayedState.health !== prev.health || decayedState.mood !== prev.mood) {
-          savePetState(decayedState);
-          return decayedState;
-        }
-        return prev;
-      });
-    };
-
-    const interval = setInterval(updatePetState, 1000);
-    return () => clearInterval(interval);
+    // Health updates are now handled by Supabase real-time subscriptions
   }, [address]);
 
   return {

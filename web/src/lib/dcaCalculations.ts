@@ -1,4 +1,5 @@
 import { isEthToken, getWethAddress } from './hooks/useContracts';
+import { toWei } from './tokenUtils';
 
 export interface DcaCalculationParams {
   chunkIn: number;
@@ -9,6 +10,18 @@ export interface DcaCalculationParams {
   quoteAmount?: string;
 }
 
+export interface TwapCalculationParams {
+  chunkIn: number;
+  totalAmount?: number;
+  endDate?: string;
+  interval: number;
+  slippageTolerance: number;
+  quoteAmount?: string;
+  depositToAave?: boolean;
+  recipient?: `0x${string}`;
+  aavePool?: `0x${string}`;
+}
+
 export interface DcaCalculationResult {
   totalCycles: number;
   estimatedDays: number;
@@ -16,6 +29,20 @@ export interface DcaCalculationResult {
   minOutPerFill: string;
   totalAmountToDca: number;
   willRunForever: boolean;
+}
+
+export interface TwapCalculationResult extends DcaCalculationResult {
+  twapParams: {
+    interval: number;
+    chunks: number;
+    chunkIn: bigint;
+    minOut: bigint;
+  };
+  aaveParams: {
+    depositToAave: boolean;
+    recipient: `0x${string}`;
+    aavePool: `0x${string}`;
+  };
 }
 
 /**
@@ -103,6 +130,38 @@ export function calculateDcaParameters(params: DcaCalculationParams): DcaCalcula
     minOutPerFill,
     totalAmountToDca,
     willRunForever,
+  };
+}
+
+/**
+ * Calculate TWAP parameters for the new contract structure
+ */
+export function calculateTwapParameters(params: TwapCalculationParams): TwapCalculationResult {
+  // First calculate basic DCA parameters
+  const dcaResult = calculateDcaParameters(params);
+  
+  // Convert chunkIn to bigint for TWAP params
+  const chunkInBigInt = BigInt(toWei(params.chunkIn.toString(), 18));
+  
+  // Calculate TWAP parameters
+  const twapParams = {
+    interval: params.interval,
+    chunks: dcaResult.totalCycles,
+    chunkIn: chunkInBigInt,
+    minOut: BigInt(dcaResult.minOutPerFill),
+  };
+  
+  // Default Aave parameters
+  const aaveParams = {
+    depositToAave: params.depositToAave || false,
+    recipient: params.recipient || '0x0000000000000000000000000000000000000000' as `0x${string}`,
+    aavePool: params.aavePool || '0x0000000000000000000000000000000000000000' as `0x${string}`,
+  };
+  
+  return {
+    ...dcaResult,
+    twapParams,
+    aaveParams,
   };
 }
 

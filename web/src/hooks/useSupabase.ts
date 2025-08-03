@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabaseService, type Feed, type UserSettings, type User } from '@/lib/supabase';
+import { supabaseService, type Feed, type UserSettings, type User, type BotExecution } from '@/lib/supabase';
 
 // Hook for user feeds
 export const useUserFeeds = (walletAddress: string) => {
@@ -202,5 +202,105 @@ export const useCalculateAndUpdateHealth = () => {
         queryKey: ['health-record', walletAddress] 
       });
     },
+  });
+}; 
+
+// Hook for getting feeds ready for execution (for external bots)
+export const useFeedsForExecution = () => {
+  return useQuery({
+    queryKey: ['feeds-for-execution'],
+    queryFn: () => supabaseService.getFeedsForExecution(),
+    staleTime: 1000 * 10, // 10 seconds - very fresh data for bots
+    refetchInterval: 1000 * 30, // Refetch every 30 seconds
+  });
+};
+
+// Hook for updating feed execution status
+export const useUpdateFeedExecutionStatus = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: ({ feedId, updates }: { 
+      feedId: string; 
+      updates: {
+        status?: 'active' | 'completed' | 'cancelled' | 'failed' | 'executing';
+        next_fill_time?: string;
+        bot_execution_count?: number;
+        last_bot_execution?: string;
+        transaction_hash?: string;
+        bot_execution_errors?: unknown[];
+        metadata?: unknown;
+      };
+    }) => supabaseService.updateFeedExecutionStatus(feedId, updates),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['feeds'] });
+      queryClient.invalidateQueries({ queryKey: ['feeds-for-execution'] });
+    },
+  });
+};
+
+// Hook for enhanced bot execution logging
+export const useLogBotExecutionWithMetadata = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: (executionData: Omit<BotExecution, 'id' | 'execution_time'> & {
+      execution_metadata?: {
+        gas_estimate?: string;
+        slippage_used?: number;
+        price_impact?: number;
+        route_used?: unknown;
+        execution_duration_ms?: number;
+        retry_count?: number;
+        error_details?: unknown;
+      };
+    }) => supabaseService.logBotExecutionWithMetadata(executionData),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['bot-execution-analytics'] });
+    },
+  });
+};
+
+// Hook for getting feeds that need attention
+export const useFeedsNeedingAttention = () => {
+  return useQuery({
+    queryKey: ['feeds-needing-attention'],
+    queryFn: () => supabaseService.getFeedsNeedingAttention(),
+    staleTime: 1000 * 60, // 1 minute
+    refetchInterval: 1000 * 60 * 5, // Refetch every 5 minutes
+  });
+};
+
+// Hook for batch updating feeds
+export const useBatchUpdateFeeds = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: (updates: Array<{ id: string; updates: Partial<Feed> }>) => 
+      supabaseService.batchUpdateFeeds(updates),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['feeds'] });
+      queryClient.invalidateQueries({ queryKey: ['feeds-for-execution'] });
+    },
+  });
+};
+
+// Hook for getting feed execution history
+export const useFeedExecutionHistory = (feedId: string) => {
+  return useQuery({
+    queryKey: ['feed-execution-history', feedId],
+    queryFn: () => supabaseService.getFeedExecutionHistory(feedId),
+    enabled: !!feedId,
+    staleTime: 1000 * 60 * 5, // 5 minutes
+  });
+};
+
+// Hook for system health metrics
+export const useSystemHealthMetrics = () => {
+  return useQuery({
+    queryKey: ['system-health-metrics'],
+    queryFn: () => supabaseService.getSystemHealthMetrics(),
+    staleTime: 1000 * 60, // 1 minute
+    refetchInterval: 1000 * 60 * 2, // Refetch every 2 minutes
   });
 }; 

@@ -10,6 +10,8 @@ export interface FeedDraft {
   endDate?: string;
   totalAmount?: number;
   minOut?: string;
+  recipient?: string;
+  mode?: 'peer-dca' | 'token-dca' | 'your-aave-yield';
 }
 
 export const useFeedStore = create<FeedDraft>(() => ({
