@@ -139,13 +139,18 @@ export async function getSwapTx(params: Record<string, string>) {
 /** GET /tokens - get token list */
 export async function getTokens() {
   const url = ix(`/token/v1.3/${CHAIN}`);
+  console.log('🔍 Debug - getTokens API call:', url);
+  
   const response = await fetch(url, { headers: HEADERS });
   
   if (!response.ok) {
+    console.error('❌ getTokens failed:', response.status, response.statusText);
     throw new Error(`Tokens failed: ${response.status} ${response.statusText}`);
   }
   
-  return response.json();
+  const data = await response.json();
+  console.log('✅ getTokens response:', data);
+  return data;
 }
 
 /** GET /balances - get token balances */
@@ -191,13 +196,21 @@ export async function getBulkTokenPrices(tokenAddresses: string[]) {
     currency: "USD"
   });
   
+  console.log('🔍 Debug - getBulkTokenPrices API call:', {
+    url,
+    body,
+    tokenAddresses
+  });
+  
   const res   = await fetch(url, { method: 'POST', headers: HEADERS, body });
   if (!res.ok) {
+    console.error('❌ getBulkTokenPrices failed:', res.status, res.statusText);
     console.warn(`Bulk price failed: ${res.status} ${res.statusText}`);
     return {};
   }
   // →  { "0x…tokenAddress": "1230000000000000000" }
   const data = await res.json() as Record<string, string>;
+  console.log('✅ getBulkTokenPrices response:', data);
   return data;
 }
 

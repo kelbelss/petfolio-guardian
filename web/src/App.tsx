@@ -36,16 +36,16 @@ export default function App() {
         </Link>
         <nav className="flex gap-6">
           <Link to="/" className="text-emerald-600 hover:text-emerald-700 text-lg font-medium">
-            Dashboard
+            Home
           </Link>
           <Link to="/dca/yield-feed" className="text-emerald-600 hover:text-emerald-700 text-lg font-medium">
-            Feed
+            DCA
           </Link>
           <Link to="/dca/feeds" className="text-emerald-600 hover:text-emerald-700 text-lg font-medium">
-            My Feeds
+            Feeds
           </Link>
           <Link to="/market-analysis" className="text-emerald-600 hover:text-emerald-700 text-lg font-medium">
-            Market Analysis
+            Markets
           </Link>
           <Link to="/about" className="text-emerald-600 hover:text-emerald-700 text-lg font-medium">
             About
