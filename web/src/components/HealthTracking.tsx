@@ -1,19 +1,16 @@
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useAccount } from 'wagmi';
-import { useUserFeeds, useHealthRecord, useCalculateAndUpdateHealth } from '@/hooks/useSupabase';
+import { useHealthRecord } from '@/hooks/useSupabase';
 import { formatDate } from '@/lib/format';
-import type { HealthEvent } from '@/lib/supabase';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 // Use the HealthEvent interface from supabase.ts instead of defining our own
 
 export default function HealthTracking() {
     const { address } = useAccount();
-    const { data: feedsData } = useUserFeeds(address || '');
     const { data: healthRecordData } = useHealthRecord(address || '');
-    const { mutateAsync: calculateAndUpdateHealth } = useCalculateAndUpdateHealth();
     const [showDetails, setShowDetails] = useState(false);
 
     // Update health when component mounts or feeds change
@@ -131,8 +128,8 @@ export default function HealthTracking() {
                                         border: '1px solid #d1d5db',
                                         borderRadius: '8px'
                                     }}
-                                    formatter={(value: any, name: any) => {
-                                        return [`${value.toFixed(1)}/10`, 'Health'];
+                                    formatter={(value: any) => {
+                                        return `${value.toFixed(1)}`;
                                     }}
                                     labelFormatter={(label) => `Time: ${label}`}
                                 />
@@ -171,9 +168,9 @@ export default function HealthTracking() {
                                 <div key={index} className="flex justify-between items-center text-sm p-2 rounded-lg hover:bg-gray-50">
                                     <div className="flex-1">
                                         <div className="font-medium text-gray-900">{event.reason}</div>
-                                        {event.details && typeof event.details === 'string' && (
-                                            <div className="text-xs text-gray-600">{event.details}</div>
-                                        )}
+                                        {/* {event.details && typeof event.details === 'string' && (
+                                            <div className="text-xs text-gray-600">{String(event.details)}</div>
+                                        )} */}
                                         <div className="text-xs text-gray-500">
                                             {formatDate(new Date(event.timestamp))}
                                         </div>
@@ -229,9 +226,9 @@ export default function HealthTracking() {
                                     <div className="flex justify-between items-start">
                                         <div className="flex-1">
                                             <div className="font-medium text-gray-900">{event.reason}</div>
-                                            {event.details && typeof event.details === 'string' && (
-                                                <div className="text-sm text-gray-600 mt-1">{event.details}</div>
-                                            )}
+                                            {/* {event.details && typeof event.details === 'string' && (
+                                                <div className="text-sm text-gray-600 mt-1">{String(event.details)}</div>
+                                            )} */}
                                             <div className="text-xs text-gray-500 mt-1">
                                                 {formatDate(new Date(event.timestamp))}
                                             </div>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -154,19 +154,6 @@ export default function MarketAnalysis() {
         setOrderbookData(demoOrderbook);
     }, []);
 
-    // Real price data for components
-    const getSelectedTokenPrice = () => {
-        const selectedTokenData = enrichedTokens.find(token => token.symbol === selectedToken);
-        return selectedTokenData?.price || '0';
-    };
-
-    const priceData = {
-        price: getSelectedTokenPrice()
-    };
-    const priceLoading = bulkPricesLoading;
-    const tokenMetadata = { decimals: 18 };
-    const metadataLoading = tokenListLoading;
-
     const scrollToSection = (sectionId: string) => {
         setActiveSection(sectionId);
         const element = document.getElementById(sectionId);
@@ -291,10 +278,6 @@ export default function MarketAnalysis() {
                     timeframe={timeframe}
                     setTimeframe={setTimeframe}
                     popularTokens={enrichedTokens}
-                    priceData={priceData}
-                    priceLoading={priceLoading}
-                    tokenMetadata={tokenMetadata}
-                    metadataLoading={metadataLoading}
                 />
 
                 {/* Orderbook Section */}

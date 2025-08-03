@@ -1,7 +1,5 @@
-import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import {
     BarChart3,
     ArrowUpRight,
@@ -22,10 +20,6 @@ interface TokenAnalysisProps {
     timeframe: string;
     setTimeframe: (timeframe: string) => void;
     popularTokens: TokenInfo[];
-    priceData: { price: string };
-    priceLoading: boolean;
-    tokenMetadata: { decimals: number };
-    metadataLoading: boolean;
 }
 
 export default function TokenAnalysis({
@@ -34,50 +28,8 @@ export default function TokenAnalysis({
     timeframe,
     setTimeframe,
     popularTokens,
-    priceData,
-    priceLoading,
-    tokenMetadata,
-    metadataLoading
 }: TokenAnalysisProps) {
     const timeframes = ['1h', '4h', '24h', '7d', '30d'];
-
-    const formatPrice = (price: string, symbol: string) => {
-        const num = parseFloat(price);
-        if (isNaN(num)) return '$0.00';
-
-        if (num >= 1e6) {
-            return `$${(num / 1e6).toFixed(2)}M`;
-        } else if (num >= 1e3) {
-            return `$${(num / 1e3).toFixed(2)}K`;
-        } else if (num < 0.000001) {
-            return `$${num.toExponential(2)}`;
-        } else if (num < 0.01) {
-            return `$${num.toFixed(6)}`;
-        } else if (num < 1) {
-            return `$${num.toFixed(4)}`;
-        } else {
-            return `$${num.toFixed(2)}`;
-        }
-    };
-
-    const formatAmount = (amount: string, decimals: number = 18) => {
-        const num = parseFloat(amount);
-        if (isNaN(num)) return '0';
-
-        if (num >= 1e6) {
-            return `${(num / 1e6).toFixed(2)}M`;
-        } else if (num >= 1e3) {
-            return `${(num / 1e3).toFixed(2)}K`;
-        } else if (num < 0.000001) {
-            return num.toExponential(2);
-        } else if (num < 0.01) {
-            return num.toFixed(6);
-        } else if (num < 1) {
-            return num.toFixed(4);
-        } else {
-            return num.toFixed(2);
-        }
-    };
 
     return (
         <section id="tokens" className="py-16 bg-white">

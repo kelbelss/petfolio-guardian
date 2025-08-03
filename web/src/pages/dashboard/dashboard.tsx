@@ -1,4 +1,5 @@
 // src/pages/Dashboard.tsx
+
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -135,6 +136,7 @@ export default function Dashboard() {
                                     className="w-[700px] h-[700px] object-contain"
                                 />
                             </div>
+
                         </div>
                     </div>
 
@@ -166,7 +168,7 @@ export default function Dashboard() {
                         <ActiveDCAFeeds feedsData={feedsData} />
 
                         {/* Portfolio Section */}
-                        <PortfolioSection address={address} user={user} />
+                        <PortfolioSection address={address} user={user || undefined} />
 
                         {/* Health Tracking */}
                         <div className="w-full">

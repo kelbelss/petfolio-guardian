@@ -205,6 +205,21 @@ export const useCalculateAndUpdateHealth = () => {
   });
 }; 
 
+export const useUpdateHealthRecord = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: ({ walletAddress, updates }: {
+      walletAddress: string;
+      updates: Partial<import('@/lib/supabase').HealthRecord>
+    }) => supabaseService.updateHealthRecord(walletAddress, updates),
+    onSuccess: (data, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ['health-record', variables.walletAddress]
+      });
+    },
+  });
+};
 
 
 // Hook for getting feeds ready for execution (for external bots)

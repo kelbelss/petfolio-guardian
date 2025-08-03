@@ -218,7 +218,7 @@ export default function AaveYieldWizard() {
             totalAmount: data.totalAmount,
             mode: 'your-aave-yield',
             depositToAave: true,
-            aavePool: selectedPool?.underlyingAsset || '',
+            aavePool: (selectedPool as any)?.underlyingAsset || '',
         });
         navigate('/dca/review');
     };
@@ -258,8 +258,8 @@ export default function AaveYieldWizard() {
                                     name="dstToken"
                                     control={control}
                                     render={({ field }) => {
-                                        const selectedPool = topPools.find((pool: any) => pool.underlyingAsset === field.value);
-                                        const selectedTokenMeta = selectedPool ? tokenMetadataMap.get(selectedPool.underlyingAsset.toLowerCase()) : null;
+                                        const selectedPool = topPools.find((pool: any) => pool.underlyingAsset === field.value) as any;
+                                        const selectedTokenMeta = selectedPool ? tokenMetadataMap.get((selectedPool as any).underlyingAsset?.toLowerCase()) : null;
 
                                         return (
                                             <div className="relative" ref={poolDropdownRef}>

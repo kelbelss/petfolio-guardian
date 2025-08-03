@@ -27,7 +27,7 @@ const formSchema = z.object({
         return data.endDate !== undefined;
     }
     if (data.stopCondition === 'total-amount') {
-        return data.totalAmount !== undefined && data.totalAmount > 0;
+        return data.totalAmount !== undefined && Number(data.totalAmount) > 0;
     }
     return true;
 }, {

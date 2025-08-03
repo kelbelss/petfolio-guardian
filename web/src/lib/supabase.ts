@@ -366,7 +366,7 @@ export class SupabaseService {
   }
 
   // Enhanced real-time subscriptions with better error handling
-  subscribeToFeedUpdates(callback: (feed: Feed) => void, errorCallback?: (error: any) => void) {
+  subscribeToFeedUpdates(callback: (feed: Feed) => void) {
     return this.supabase
       .channel('feed-updates')
       .on('postgres_changes', {
@@ -376,15 +376,11 @@ export class SupabaseService {
       }, (payload) => {
         callback(payload.new as Feed);
       })
-      .on('error', (error: any) => {
-        console.error('Supabase subscription error:', error);
-        errorCallback?.(error);
-      }, () => {})
       .subscribe();
   }
 
   // Subscribe to bot execution updates
-  subscribeToBotExecutions(callback: (execution: BotExecution) => void, errorCallback?: (error: any) => void) {
+  subscribeToBotExecutions(callback: (execution: BotExecution) => void) {
     return this.supabase
       .channel('bot-executions')
       .on('postgres_changes', {
@@ -394,10 +390,6 @@ export class SupabaseService {
       }, (payload) => {
         callback(payload.new as BotExecution);
       })
-      .on('error', (error: any) => {
-        console.error('Supabase subscription error:', error);
-        errorCallback?.(error);
-      }, () => {})
       .subscribe();
   }
 

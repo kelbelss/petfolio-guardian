@@ -4,10 +4,11 @@ import { useRemovePortfolioToken } from '@/hooks/useSupabase';
 import { useBalances, normalizeBalances, useTokens, useBulkTokenPrices, type TokenMeta } from '@/lib/oneInchService';
 import { fromWei } from '@/lib/tokenUtils';
 import TokenSearchModal from '@/components/TokenSearchModal';
+import type { User } from '@/lib/supabase';
 
 interface PortfolioSectionProps {
     address?: string;
-    user?: any;
+    user?: User;
 }
 
 export default function PortfolioSection({ address, user }: PortfolioSectionProps) {
@@ -118,7 +119,7 @@ export default function PortfolioSection({ address, user }: PortfolioSectionProp
         };
 
         // Show ALL portfolio tokens, not just ones with balance
-        portfolioTokens.forEach((tokenAddress) => {
+        portfolioTokens.forEach((tokenAddress: string) => {
             const info = getTokenInfo(tokenAddress);
 
             // Get balance using the same pattern as swap pages
