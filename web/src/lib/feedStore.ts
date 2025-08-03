@@ -11,7 +11,9 @@ export interface FeedDraft {
   totalAmount?: number;
   minOut?: string;
   recipient?: string;
-  mode?: 'peer-dca' | 'token-dca' | 'your-aave-yield';
+  depositToAave?: boolean;
+  aavePool?: string;
+  mode?: 'swap' | 'peer-dca' | 'token-dca' | 'your-aave-yield';
 }
 
 export const useFeedStore = create<FeedDraft>(() => ({

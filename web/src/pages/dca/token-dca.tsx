@@ -155,7 +155,7 @@ export default function FeedWizard() {
             stopCondition: data.stopCondition,
             endDate: data.endDate ? data.endDate.toISOString() : undefined,
             totalAmount: data.totalAmount,
-            mode: 'token',
+            mode: 'token-dca',
         });
         navigate('/dca/review');
     };

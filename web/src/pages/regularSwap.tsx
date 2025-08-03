@@ -15,6 +15,7 @@ import ConnectButton from '@/components/ConnectButton';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useCreateFeed } from '@/hooks/useSupabase';
 import { formatUnits } from 'viem';
+import { useFeedStore } from '@/lib/feedStore';
 
 // Types
 interface SwapState {
@@ -86,6 +87,7 @@ export default function RegularSwap() {
     const navigate = useNavigate();
     const { toast } = useToast();
     const { mutateAsync: createFeed } = useCreateFeed();
+    const setDraft = useFeedStore.setState;
 
     // Track which side is being edited to prevent loops
     const [isEditingTo, setIsEditingTo] = useState(false);
@@ -252,6 +254,15 @@ export default function RegularSwap() {
 
             // Send transaction
             const hash = await walletClient.sendTransaction(tx);
+
+            // Save to feedStore
+            setDraft({
+                mode: 'swap',
+                srcToken: state.fromToken.address,
+                dstToken: state.toToken.address,
+                chunkIn: parseFloat(state.fromAmount),
+                slippageTolerance: state.slippage,
+            });
 
             // Save swap transaction to feeds
             if (account) {
