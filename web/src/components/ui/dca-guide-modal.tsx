@@ -21,6 +21,18 @@ export function DcaGuideModal({ trigger }: DcaGuideModalProps) {
             ]
         },
         {
+            title: 'Choose Your DCA Type',
+            description: 'Select from four different DCA strategies, each with unique health rewards for your pet.',
+            icon: '🎯',
+            details: [
+                'DCA Yield (+3.0 health): Complex yield strategies with 13 options',
+                'DCA to Friend (+2.0 health): Help your mates with their investments',
+                'DCA to Self (+1.5 health): Regular self-investment strategy',
+                'Instant Swap (+1.0 health): One-off trades for quick gains'
+            ],
+            new: true
+        },
+        {
             title: 'Set DCA Parameters',
             description: 'Configure how much to invest per cycle and how often to execute the DCA.',
             icon: '⚙️',
@@ -74,6 +86,61 @@ export function DcaGuideModal({ trigger }: DcaGuideModalProps) {
         }
     ];
 
+    const dcaTypes = [
+        {
+            name: 'DCA Yield',
+            health: '+3.0',
+            icon: '📈',
+            color: 'yellow',
+            description: 'The most sophisticated DCA strategy with 13 different yield options to choose from.',
+            details: [
+                'Highest health reward for complex strategies',
+                'Perfect for experienced traders',
+                'Includes yield farming and staking options',
+                'Your pet absolutely loves this one!'
+            ]
+        },
+        {
+            name: 'DCA to Friend',
+            health: '+2.0',
+            icon: '🤝',
+            color: 'blue',
+            description: 'Help your mates with their investments whilst earning social bonus health.',
+            details: [
+                'Social trading with health rewards',
+                'Share the wealth with friends',
+                'Build community through trading',
+                'Sharing is caring, innit?'
+            ]
+        },
+        {
+            name: 'DCA to Self',
+            health: '+1.5',
+            icon: '👤',
+            color: 'green',
+            description: 'Standard self-investment strategy for consistent portfolio growth.',
+            details: [
+                'Reliable health rewards',
+                'Perfect for beginners',
+                'Consistent pet feeding',
+                'Your pet appreciates responsible trading'
+            ]
+        },
+        {
+            name: 'Instant Swap',
+            health: '+1.0',
+            icon: '⚡',
+            color: 'gray',
+            description: 'Quick one-off trades for immediate token swaps.',
+            details: [
+                'Fastest execution',
+                'Lowest health reward',
+                'Good for urgent trades',
+                'Better than nothing for your pet!'
+            ]
+        }
+    ];
+
     return (
         <>
             <div onClick={() => setIsOpen(true)}>
@@ -86,7 +153,7 @@ export function DcaGuideModal({ trigger }: DcaGuideModalProps) {
 
             {isOpen && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-lg max-w-2xl max-h-[80vh] overflow-y-auto w-full">
+                    <div className="bg-white rounded-lg max-w-4xl max-h-[90vh] overflow-y-auto w-full">
                         <div className="p-6">
                             <div className="flex items-center justify-between mb-6">
                                 <div className="flex items-center gap-2">
@@ -112,9 +179,42 @@ export function DcaGuideModal({ trigger }: DcaGuideModalProps) {
                                             <div>
                                                 Dollar Cost Averaging (DCA) is an investment strategy where you invest a fixed amount
                                                 at regular intervals, regardless of market conditions. This helps reduce the impact
-                                                of market volatility on your investment.
+                                                of market volatility on your investment whilst keeping your pet happy!
                                             </div>
                                         </div>
+                                    </div>
+                                </div>
+
+                                {/* DCA Types Section */}
+                                <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                                    <h3 className="font-semibold text-purple-800 mb-3 flex items-center gap-2">
+                                        🏆 DCA Types & Health Rewards
+                                        <Badge variant="secondary" className="text-xs">New!</Badge>
+                                    </h3>
+                                    <p className="text-sm text-purple-700 mb-4">
+                                        Different DCA strategies give different health rewards to your pet. The more complex and social your trading, the happier your pet becomes!
+                                    </p>
+                                    <div className="grid md:grid-cols-2 gap-4">
+                                        {dcaTypes.map((type, index) => (
+                                            <div key={index} className={`bg-gradient-to-br from-${type.color}-50 to-${type.color}-100 border border-${type.color}-200 rounded-lg p-4`}>
+                                                <div className="flex items-center gap-3 mb-2">
+                                                    <span className="text-2xl">{type.icon}</span>
+                                                    <div>
+                                                        <h4 className="font-bold text-gray-800">{type.name}</h4>
+                                                        <div className="text-2xl font-bold text-green-600">{type.health}</div>
+                                                    </div>
+                                                </div>
+                                                <p className="text-sm text-gray-600 mb-3">{type.description}</p>
+                                                <ul className="space-y-1">
+                                                    {type.details.map((detail, detailIndex) => (
+                                                        <li key={detailIndex} className="text-xs text-gray-500 flex items-start gap-2">
+                                                            <span className="text-emerald-500 mt-1">•</span>
+                                                            <span>{detail}</span>
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        ))}
                                     </div>
                                 </div>
 
@@ -131,6 +231,9 @@ export function DcaGuideModal({ trigger }: DcaGuideModalProps) {
                                                         <h3 className="font-semibold text-gray-900">{step.title}</h3>
                                                         {step.warning && (
                                                             <Badge variant="destructive" className="text-xs">Important</Badge>
+                                                        )}
+                                                        {step.new && (
+                                                            <Badge variant="secondary" className="text-xs">New</Badge>
                                                         )}
                                                     </div>
                                                     <p className="text-gray-600 text-sm mb-3">{step.description}</p>
@@ -158,6 +261,7 @@ export function DcaGuideModal({ trigger }: DcaGuideModalProps) {
                                                 <li>• <strong>Gas Fees:</strong> Each DCA execution incurs gas fees, which vary based on network congestion</li>
                                                 <li>• <strong>Slippage:</strong> Set appropriate slippage tolerance to avoid failed transactions</li>
                                                 <li>• <strong>Market Risk:</strong> DCA doesn't guarantee profits - crypto markets are volatile</li>
+                                                <li>• <strong>Pet Health:</strong> Your pet loses 0.5 health every 6 hours without activity</li>
                                             </ul>
                                         </div>
                                     </div>

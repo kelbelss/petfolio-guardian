@@ -14,8 +14,8 @@ export default function HowItWorks() {
                     🐾 How Petfolio Guardian Works
                 </h1>
                 <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-                    A unique platform that combines automated DCA trading with virtual pet care.
-                    Feed your digital pet while building your crypto portfolio through dollar-cost averaging.
+                    A brilliant platform that combines automated DCA trading with virtual pet care.
+                    Feed your digital pet whilst building your crypto portfolio through dollar-cost averaging.
                 </p>
             </div>
 
@@ -49,6 +49,87 @@ export default function HowItWorks() {
                             <div className="text-3xl mb-2">3️⃣</div>
                             <h3 className="font-semibold text-gray-800 mb-2">Feed Your Pet</h3>
                             <p className="text-sm text-gray-600">Watch your pet's happiness grow as your DCA orders execute automatically</p>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+
+            {/* Health Reward System */}
+            <Card className="mb-8 bg-gradient-to-r from-purple-50 to-pink-50 border-purple-200">
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-3 text-purple-700">
+                        🏆 Health Reward System
+                        <Badge variant="secondary" className="text-xs">New!</Badge>
+                    </CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <div className="mb-6">
+                        <p className="text-gray-700 mb-4">
+                            Your pet's health is directly tied to your trading activity! Different types of trades give different health rewards.
+                            The more complex and social your trading, the happier your pet becomes. Brilliant, isn't it?
+                        </p>
+                    </div>
+
+                    <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div className="bg-gradient-to-br from-yellow-50 to-orange-50 border border-yellow-200 rounded-lg p-4">
+                            <div className="text-center">
+                                <div className="text-2xl mb-2">📈</div>
+                                <h4 className="font-bold text-yellow-800 mb-1">DCA Yield</h4>
+                                <div className="text-3xl font-bold text-yellow-600 mb-2">+3.0</div>
+                                <p className="text-xs text-yellow-700 mb-2">Highest Reward</p>
+                                <p className="text-xs text-gray-600">
+                                    Complex yield strategies with 13 different options. Your pet loves sophisticated trading!
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4">
+                            <div className="text-center">
+                                <div className="text-2xl mb-2">🤝</div>
+                                <h4 className="font-bold text-blue-800 mb-1">DCA to Friend</h4>
+                                <div className="text-3xl font-bold text-blue-600 mb-2">+2.0</div>
+                                <p className="text-xs text-blue-700 mb-2">Social Bonus</p>
+                                <p className="text-xs text-gray-600">
+                                    Help your mates with their investments. Sharing is caring, and your pet knows it!
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 rounded-lg p-4">
+                            <div className="text-center">
+                                <div className="text-2xl mb-2">👤</div>
+                                <h4 className="font-bold text-green-800 mb-1">DCA to Self</h4>
+                                <div className="text-3xl font-bold text-green-600 mb-2">+1.5</div>
+                                <p className="text-xs text-green-700 mb-2">Standard</p>
+                                <p className="text-xs text-gray-600">
+                                    Regular self-investment. Your pet appreciates consistent, responsible trading.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="bg-gradient-to-br from-gray-50 to-slate-50 border border-gray-200 rounded-lg p-4">
+                            <div className="text-center">
+                                <div className="text-2xl mb-2">⚡</div>
+                                <h4 className="font-bold text-gray-800 mb-1">Instant Swap</h4>
+                                <div className="text-3xl font-bold text-gray-600 mb-2">+1.0</div>
+                                <p className="text-xs text-gray-700 mb-2">Quick Trade</p>
+                                <p className="text-xs text-gray-600">
+                                    One-off trades. Better than nothing, but your pet prefers regular feeding!
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="mt-6 bg-amber-50 border border-amber-200 rounded-lg p-4">
+                        <div className="flex items-start gap-3">
+                            <span className="text-amber-600 text-lg">💡</span>
+                            <div className="text-sm text-amber-800">
+                                <div className="font-medium mb-1">Health Decay System</div>
+                                <p>
+                                    Your pet loses 0.5 health every 6 hours without activity. Keep them happy with regular trading!
+                                    Health ranges from 0 (very sad) to 10 (absolutely chuffed).
+                                </p>
+                            </div>
                         </div>
                     </div>
                 </CardContent>
@@ -93,7 +174,7 @@ export default function HowItWorks() {
                             </ul>
                         </div>
 
-                        <Link to="/dca/setup">
+                        <Link to="/dca/token-dca">
                             <Button className="w-full bg-blue-600 hover:bg-blue-700">
                                 Start DCA Trading
                             </Button>
@@ -250,7 +331,7 @@ export default function HowItWorks() {
                 </CardHeader>
                 <CardContent>
                     <div className="flex flex-col sm:flex-row gap-4">
-                        <Link to="/dca/setup" className="flex-1">
+                        <Link to="/dca/token-dca" className="flex-1">
                             <Button className="w-full bg-green-600 hover:bg-green-700">
                                 🚀 Create Your First DCA
                             </Button>

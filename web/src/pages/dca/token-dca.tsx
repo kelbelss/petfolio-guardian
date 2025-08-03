@@ -21,7 +21,7 @@ const formSchema = z.object({
     interval: z.number().min(300, 'Interval must be at least 5 minutes'),
     stopCondition: z.enum(['end-date', 'total-amount']),
     endDate: z.date().optional(),
-    totalAmount: z.number().optional(),
+    totalAmount: z.string().optional(),
 }).refine((data) => {
     if (data.stopCondition === 'end-date') {
         return data.endDate !== undefined;
@@ -33,14 +33,6 @@ const formSchema = z.object({
 }, {
     message: "Please provide the required value for your selected stop condition",
     path: ["stopCondition"]
-}).refine((data) => {
-    if (data.stopCondition === 'total-amount' && data.totalAmount !== undefined) {
-        return data.totalAmount >= 0.01;
-    }
-    return true;
-}, {
-    message: "Total amount must be at least 0.01",
-    path: ["totalAmount"]
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -62,7 +54,7 @@ export default function FeedWizard() {
             interval: existingDraft.interval || 3600,
             stopCondition: existingDraft.stopCondition || 'end-date',
             endDate: existingDraft.endDate ? new Date(existingDraft.endDate) : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-            totalAmount: existingDraft.totalAmount || 0,
+            totalAmount: existingDraft.totalAmount ? existingDraft.totalAmount.toString() : '',
         },
     });
 
@@ -154,7 +146,7 @@ export default function FeedWizard() {
             interval: data.interval,
             stopCondition: data.stopCondition,
             endDate: data.endDate ? data.endDate.toISOString() : undefined,
-            totalAmount: data.totalAmount,
+            totalAmount: data.totalAmount ? Number(data.totalAmount) : undefined,
             mode: 'token-dca',
         });
         navigate('/dca/review');
@@ -296,31 +288,36 @@ export default function FeedWizard() {
                                 )}
                             </div>
 
-                            <div className={`space-y-3 ${watchedValues.stopCondition !== 'total-amount' ? 'opacity-50 pointer-events-none' : ''}`}>
+                            <div className={`space-y-3 ${watchedValues.stopCondition !== 'total-amount' ? 'opacity-50' : ''}`}>
                                 <Label htmlFor="totalAmount" className="text-sm font-semibold text-gray-700 block">Total Amount to DCA</Label>
                                 <div className="relative">
                                     <Controller
                                         name="totalAmount"
                                         control={control}
                                         render={({ field }) => (
-                                            <Input
+                                            <input
                                                 id="totalAmount"
-                                                type="number"
-                                                min={0.01}
-                                                step={0.01}
+                                                type="text"
                                                 placeholder="0.00"
                                                 className="w-full px-4 py-3 pr-20 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors"
-                                                {...field}
-                                                value={field.value === 0 ? '' : field.value}
-                                                onChange={e => field.onChange(Number(e.target.value) || 0)}
+                                                value={field.value || ''}
+                                                onChange={e => {
+                                                    const value = e.target.value;
+                                                    console.log('Raw input value:', value);
+                                                    // Keep as string to allow typing, convert to number only when needed
+                                                    field.onChange(value);
+                                                }}
+                                                onBlur={field.onBlur}
+                                                name={field.name}
                                             />
                                         )}
                                     />
-                                    {(watchedValues.totalAmount || 0) > 0 && fromPriceUsd > 0 && (
+                                    {(Number(watchedValues.totalAmount) || 0) > 0 && fromPriceUsd > 0 && (
                                         <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-sm text-gray-500">
-                                            ≈ ${((watchedValues.totalAmount || 0) * fromPriceUsd).toFixed(2)}
+                                            ≈ ${((Number(watchedValues.totalAmount) || 0) * fromPriceUsd).toFixed(2)}
                                         </div>
                                     )}
+
                                 </div>
                                 {errors.totalAmount && <p className="text-red-500 text-sm mt-2">{errors.totalAmount.message}</p>}
                             </div>

@@ -13,13 +13,14 @@ import MyFeeds from '@/pages/dca/feeds';
 import RegularSwap from '@/pages/regularSwap';
 import MarketAnalysis from '@/pages/market-analysis/market-analysis';
 import HowItWorks from '@/pages/how-it-works';
-import YieldFeedWizard from '@/pages/yield-feed/yield-feed';
-import GeneralYieldWizard from '@/pages/yield-feed/general-yield';
-import AaveYieldWizard from '@/pages/yield-feed/aave-yield';
-import FriendDcaWizard from '@/pages/dca/friend';
-import TokenDcaWizard from '@/pages/yield-feed/token-dca';
+import YieldFeedWizard from '@/pages/dca/yield-feed';
+
+import YourAaveYieldWizard from '@/pages/dca/your-aave-yield';
+import PeerDcaWizard from '@/pages/dca/friend';
+import TokenDcaWizard from '@/pages/dca/token-dca';
 import GasBadge from '@/components/GasBadge';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import TestInput from '@/components/TestInput';
 
 export default function App() {
   useEffect(() => {
@@ -37,20 +38,14 @@ export default function App() {
           <Link to="/" className="text-emerald-600 hover:text-emerald-700 text-lg font-medium">
             Dashboard
           </Link>
-          <Link to="/regular-swap" className="text-emerald-600 hover:text-emerald-700 text-lg font-medium">
-            Swap
-          </Link>
-          <Link to="/dca/setup" className="text-emerald-600 hover:text-emerald-700 text-lg font-medium">
-            DCA Setup
-          </Link>
-          <Link to="/market-analysis" className="text-emerald-600 hover:text-emerald-700 text-lg font-medium">
-            Market Analysis
+          <Link to="/dca/yield-feed" className="text-emerald-600 hover:text-emerald-700 text-lg font-medium">
+            Feed
           </Link>
           <Link to="/dca/feeds" className="text-emerald-600 hover:text-emerald-700 text-lg font-medium">
             My Feeds
           </Link>
-          <Link to="/yield-feed" className="text-emerald-600 hover:text-emerald-700 text-lg font-medium">
-            Yield Feed
+          <Link to="/market-analysis" className="text-emerald-600 hover:text-emerald-700 text-lg font-medium">
+            Market Analysis
           </Link>
           <Link to="/how-it-works" className="text-emerald-600 hover:text-emerald-700 text-lg font-medium">
             How It Works
@@ -71,16 +66,16 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/market-analysis" element={<MarketAnalysis />} />
-          <Route path="/dca/setup" element={<TokenDcaWizard />} />
           <Route path="/dca/review" element={<DcaReview />} />
           <Route path="/dca/feeds" element={<MyFeeds />} />
 
           <Route path="/regular-swap" element={<RegularSwap />} />
-          <Route path="/yield-feed" element={<YieldFeedWizard />} />
-          <Route path="/yield-feed/general" element={<GeneralYieldWizard />} />
-          <Route path="/yield-feed/aave" element={<AaveYieldWizard />} />
-          <Route path="/dca/friend" element={<FriendDcaWizard />} />
-          <Route path="/yield-feed/token-dca" element={<TokenDcaWizard />} />
+          <Route path="/dca/yield-feed" element={<YieldFeedWizard />} />
+
+          <Route path="/dca/your-aave-yield" element={<YourAaveYieldWizard />} />
+          <Route path="/dca/peer-dca" element={<PeerDcaWizard />} />
+          <Route path="/dca/token-dca" element={<TokenDcaWizard />} />
+          <Route path="/test-input" element={<TestInput />} />
           <Route path="/how-it-works" element={<HowItWorks />} />
           <Route path="*" element={<div className="max-w-3xl mx-auto p-6">Not Found</div>} />
         </Routes>

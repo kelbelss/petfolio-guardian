@@ -3,14 +3,16 @@ import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { usePetState } from '@/hooks/usePetState';
-import { PriceFeedWidget } from '@/pages/dashboard/price-feed-widget';
+
+
 import HealthTracking from '@/components/HealthTracking';
 import { useAccount, useWalletClient } from 'wagmi';
 import { useToast } from '@/components/ui/use-toast';
 import { useUser, useUpdateUser, useCreateUser, useUserFeeds, useHealthRecord } from '@/hooks/useSupabase';
 import type { Feed } from '@/lib/supabase';
 import PortfolioSection from '@/components/PortfolioSection';
+import { formatInterval } from '@/lib/utils/format-utils';
+// testContractAccess removed - function no longer exists in V2
 
 export default function Dashboard() {
     const navigate = useNavigate();
@@ -20,11 +22,9 @@ export default function Dashboard() {
     const { mutateAsync: updateUser } = useUpdateUser();
     const { mutateAsync: createUser } = useCreateUser();
     const { data: feedsData } = useUserFeeds(address || '');
+    const { data: healthRecordData } = useHealthRecord(address || '');
     const user = userData?.data;
     const [hippoName, setHippoName] = React.useState<string>('');
-    const {
-        getHippoImage
-    } = usePetState();
 
     // Update local state when user data changes or wallet disconnects
     React.useEffect(() => {
@@ -123,7 +123,13 @@ export default function Dashboard() {
 
                             <div className="w-[500px] h-[500px] mb-6">
                                 <img
-                                    src={getHippoImage()}
+                                    src={(() => {
+                                        const health = healthRecordData?.data?.current_health;
+                                        if (!health) return '/src/assets/HipposHappy.gif';
+                                        if (health <= 3) return '/src/assets/HipposSad.gif';
+                                        if (health <= 6) return '/src/assets/HipposMid.gif';
+                                        return '/src/assets/HipposHappy.gif';
+                                    })()}
                                     alt="Hippo"
                                     className="w-[700px] h-[700px] object-contain"
                                 />
@@ -139,6 +145,8 @@ export default function Dashboard() {
                                 🍽️ Feed {hippoName ? hippoName : 'Your Hippo'}, Build Your Portfolio
                             </h2>
                             <p className="text-emerald-100 text-base">Your hippo's health depends on regular DCA feeding. Start a DCA schedule to keep them happy!</p>
+
+                            {/* Contract test button removed - function no longer exists in V2 */}
                         </div>
 
                         {/* Vitals Bar Row */}
@@ -159,11 +167,6 @@ export default function Dashboard() {
                         {/* Portfolio Section */}
                         <PortfolioSection address={address} user={user} />
 
-                        {/* Price Feed Widget */}
-                        <div className="w-full">
-                            <PriceFeedWidget />
-                        </div>
-
                         {/* Health Tracking */}
                         <div className="w-full">
                             <HealthTracking />
@@ -176,10 +179,11 @@ export default function Dashboard() {
 }
 
 function FeedNowSection({ navigate }: { navigate: (path: string) => void }) {
-    const [selectedOption, setSelectedOption] = React.useState<'regular' | 'recurring' | 'fusion' | 'fusion-plus'>('regular');
+    const [selectedOption, setSelectedOption] = React.useState<'regular' | 'recurring' | 'fusion' | 'custom-yield'>('regular');
     const { address } = useAccount();
     const { data: walletClient } = useWalletClient();
     const { toast } = useToast();
+    const scrollContainerRef = React.useRef<HTMLDivElement>(null);
 
     // Handle Feed Now button based on selection
     const handleFeedNow = async () => {
@@ -191,7 +195,24 @@ function FeedNowSection({ navigate }: { navigate: (path: string) => void }) {
         if (selectedOption === 'regular') {
             navigate('/regular-swap');
         } else if (selectedOption === 'recurring') {
-            navigate('/dca/setup');
+            navigate('/dca/token-dca');
+        } else if (selectedOption === 'fusion') {
+            navigate('/dca/friend');
+        } else if (selectedOption === 'custom-yield') {
+            navigate('/dca/your-aave-yield');
+        }
+    };
+
+    // Scroll functions for navigation arrows
+    const scrollLeft = () => {
+        if (scrollContainerRef.current) {
+            scrollContainerRef.current.scrollBy({ left: -340, behavior: 'smooth' });
+        }
+    };
+
+    const scrollRight = () => {
+        if (scrollContainerRef.current) {
+            scrollContainerRef.current.scrollBy({ left: 340, behavior: 'smooth' });
         }
     };
 
@@ -199,47 +220,35 @@ function FeedNowSection({ navigate }: { navigate: (path: string) => void }) {
     const swapOptions = [
         {
             id: 'regular',
-            title: 'Regular',
-            description: 'Instant DEX swap, classic path',
+            title: 'Instant Swap',
+            description: 'Quick one-off token swaps',
             icon: '⚡',
-            estimatedTime: '~30 seconds',
-            estimatedGas: '~150,000 gas',
             explanation: 'Standard swap through 1inch aggregator. Fastest execution with competitive pricing.',
-            price: '0',
-            output: '0'
+            hippoSnack: '+1.0'
         },
         {
             id: 'recurring',
-            title: 'Recurring Feeds',
-            description: 'Set up automated DCA strategies',
-            icon: '🔄',
-            estimatedTime: '~5 minutes',
-            estimatedGas: '~200,000 gas',
+            title: 'DCA to Self',
+            description: 'Regular self-investment strategy',
+            icon: '👤',
             explanation: 'Create recurring DCA feeds to automatically feed your hippo on schedule.',
-            price: '0',
-            output: '0'
+            hippoSnack: '+1.5'
         },
         {
             id: 'fusion',
-            title: 'Fusion',
-            description: 'Intent-based, MEV-protected, better price',
-            icon: '🛡️',
-            estimatedTime: '~2-5 minutes',
-            estimatedGas: '~80,000 gas',
-            explanation: 'MEV-protected intent-based swap. Slower but better price execution and protection.',
-            price: '0',
-            output: '0'
+            title: 'DCA to Friend',
+            description: 'Help your mates with their investments',
+            icon: '🤝',
+            explanation: 'Set up DCA strategies that can be shared and executed with trusted peers.',
+            hippoSnack: '+2.0'
         },
         {
-            id: 'fusion-plus',
-            title: 'Fusion+',
-            description: 'Advanced intent-based with enhanced protection',
-            icon: '🚀',
-            estimatedTime: '~3-7 minutes',
-            estimatedGas: '~60,000 gas',
-            explanation: 'Premium intent-based swap with maximum MEV protection and optimal routing.',
-            price: '0',
-            output: '0'
+            id: 'custom-yield',
+            title: 'DCA Yield',
+            description: 'Complex yield strategies with 13 options',
+            icon: '📈',
+            explanation: 'Create sophisticated DCA strategies with advanced yield farming and risk management.',
+            hippoSnack: '+3.0'
         }
     ];
 
@@ -254,93 +263,92 @@ function FeedNowSection({ navigate }: { navigate: (path: string) => void }) {
                 <div className="space-y-4">
                     <div>
                         <h3 className="text-lg font-semibold text-gray-900 mb-4">Choose Swap Method</h3>
-                        <div className="flex gap-4 overflow-x-auto pb-4">
-                            <div className="flex gap-4" style={{ minWidth: 'max-content' }}>
-                                {swapOptions.map(option => (
-                                    <div
-                                        key={option.id}
-                                        className={`
+                        <div className="relative">
+                            {/* Left Arrow */}
+                            <button
+                                onClick={scrollLeft}
+                                className="absolute left-0 top-1/2 transform -translate-y-1/2 z-10 bg-white border border-gray-300 rounded-full p-2 shadow-md hover:bg-gray-50 transition-colors"
+                            >
+                                <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                                </svg>
+                            </button>
+
+                            {/* Right Arrow */}
+                            <button
+                                onClick={scrollRight}
+                                className="absolute right-0 top-1/2 transform -translate-y-1/2 z-10 bg-white border border-gray-300 rounded-full p-2 shadow-md hover:bg-gray-50 transition-colors"
+                            >
+                                <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                </svg>
+                            </button>
+
+                            <div className="flex gap-4 overflow-x-auto pb-4 px-12" ref={scrollContainerRef}>
+                                <div className="flex gap-4" style={{ minWidth: 'max-content' }}>
+                                    {swapOptions.map(option => (
+                                        <div
+                                            key={option.id}
+                                            className={`
                                         relative border-2 rounded-xl p-4 cursor-pointer transition-all duration-200 w-80
                                         ${selectedOption === option.id
-                                                ? 'border-emerald-500 bg-emerald-50 shadow-md'
-                                                : 'border-gray-200 bg-white hover:border-gray-300'}
+                                                    ? 'border-emerald-500 bg-emerald-50 shadow-md'
+                                                    : 'border-gray-200 bg-white hover:border-gray-300'}
                                     `}
-                                        onClick={() => {
-                                            if (option.id === 'regular' || option.id === 'recurring') {
+                                            onClick={() => {
                                                 setSelectedOption(option.id as typeof selectedOption);
-                                            }
-                                        }}
-                                    >
-                                        {/* Coming Soon Banner for Fusion and Fusion+ */}
-                                        {(option.id === 'fusion' || option.id === 'fusion-plus') && (
-                                            <div className="absolute top-4 left-2/3 transform -translate-x-1/2 z-20 pr-10">
-                                                <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 text-white px-3 py-1 rounded-full text-xs font-semibold shadow-lg whitespace-nowrap">
-                                                    🚀 Coming Soon
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {/* radio indicator */}
-                                        <div className="absolute top-3 right-3">
-                                            <div className={`
+                                            }}
+                                        >
+                                            {/* radio indicator */}
+                                            <div className="absolute top-3 right-3">
+                                                <div className={`
                                             w-5 h-5 rounded-full border-2 flex items-center justify-center
                                             ${selectedOption === option.id
-                                                    ? 'border-emerald-500 bg-emerald-500'
-                                                    : 'border-gray-300'}
+                                                        ? 'border-emerald-500 bg-emerald-500'
+                                                        : 'border-gray-300'}
                                         `}>
-                                                {selectedOption === option.id && (
-                                                    <div className="w-2 h-2 bg-white rounded-full" />
-                                                )}
+                                                    {selectedOption === option.id && (
+                                                        <div className="w-2 h-2 bg-white rounded-full" />
+                                                    )}
+                                                </div>
                                             </div>
-                                        </div>
 
-                                        {/* icon + title */}
-                                        <div className="flex items-center gap-2 mb-3">
-                                            <span className="text-2xl">{option.icon}</span>
-                                            <h4 className="font-semibold text-gray-900">{option.title}</h4>
-                                        </div>
-
-                                        {/* description */}
-                                        <p className="text-sm text-gray-600 mb-3">{option.description}</p>
-
-                                        {/* estimates */}
-                                        <div className="space-y-1 text-sm mb-3">
-                                            <div className="flex justify-between">
-                                                <span className="text-gray-600">Est. Time:</span>
-                                                <span className="font-medium">{option.estimatedTime}</span>
+                                            {/* icon + title */}
+                                            <div className="flex items-center gap-2 mb-3">
+                                                <span className="text-2xl">{option.icon}</span>
+                                                <div>
+                                                    <h4 className="font-semibold text-gray-900">{option.title}</h4>
+                                                </div>
                                             </div>
-                                            <div className="flex justify-between">
-                                                <span className="text-gray-600">Est. Gas:</span>
-                                                <span className="font-medium">{option.estimatedGas}</span>
+
+                                            {/* description */}
+                                            <p className="text-sm text-gray-600 mb-3">{option.description}</p>
+
+                                            {/* hippo snack */}
+                                            <div className="flex justify-between items-center text-sm mb-3">
+                                                <span className="text-gray-600">🦛 Hippo Snack:</span>
+                                                <span className={`font-medium ${option.hippoSnack === '0' ? 'text-gray-400' : 'text-emerald-600'}`}>
+                                                    {option.hippoSnack}
+                                                </span>
                                             </div>
-                                        </div>
 
-                                        {/* explanation */}
-                                        <p className="text-xs text-gray-500 leading-relaxed mb-3">
-                                            {option.explanation}
-                                        </p>
-
-                                        {/* DEMO PRICE / OUTPUT */}
-                                        <div className="flex justify-between text-sm font-medium">
-                                            <span>Price:</span>
-                                            <span>{option.price}</span>
+                                            {/* explanation */}
+                                            <p className="text-xs text-gray-500 leading-relaxed mb-3">
+                                                {option.explanation}
+                                            </p>
                                         </div>
-                                        <div className="flex justify-between text-sm font-medium">
-                                            <span>Output:</span>
-                                            <span>{option.output}</span>
-                                        </div>
-                                    </div>
-                                ))}
+                                    ))}
+                                </div>
                             </div>
                         </div>
-                    </div>
-                    <div className="flex gap-3 pt-4 border-t border-gray-200">
-                        <Button
-                            className="flex-1 bg-emerald-400 hover:bg-emerald-500 text-white shadow-sm hover:shadow-md transition-all"
-                            onClick={handleFeedNow}
-                        >
-                            🍽️ Feed Now
-                        </Button>
+                        <div className="flex gap-3 pt-4 border-t border-gray-200">
+                            <Button
+                                className="flex-1 bg-emerald-400 hover:bg-emerald-500 text-white shadow-sm hover:shadow-md transition-all"
+                                onClick={handleFeedNow}
+                            >
+                                🍽️ Feed Now
+                            </Button>
+                        </div>
                     </div>
                 </div>
             </CardContent>
@@ -551,13 +559,7 @@ function ActiveDCAFeeds({ feedsData }: { feedsData: { data: Feed[] | null } | un
         );
     }, [feedsData]);
 
-    const formatInterval = (period: number) => {
-        const hours = period / 3600;
-        if (hours < 1) return `${period / 60} minutes`;
-        if (hours < 24) return `${hours} hours`;
-        if (hours < 168) return `${hours / 24} days`;
-        return `${hours / 168} weeks`;
-    };
+
 
     const getNextFeedTime = (feed: Feed) => {
         if (!feed.next_fill_time) return 'Unknown';

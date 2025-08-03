@@ -1,26 +1,53 @@
 import { useFeedStore } from '../../lib/feedStore';
-import { useYieldFeedStore } from '../../lib/yieldFeedStore';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useAccount } from 'wagmi';
-import { useQuote, useGasPrice, type QuoteResponse } from '@/lib/oneInchService';
+import { useQuote, useGasPrice, useTokens, useTokenPrice, type QuoteResponse, type TokenMeta } from '@/lib/oneInchService';
 import { calculateDcaParameters, calculateTwapParameters } from '@/lib/dcaCalculations';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useToast } from '@/components/ui/use-toast';
-import { toWei, fromWei } from '@/lib/tokenUtils';
-import { useCreateOrder } from '@/lib/hooks/useLimitOrder';
-import { CONTRACT_ADDRESSES } from '@/config/base';
-import { buildPermit2Tx } from '@/lib/permit2';
-import { usePublicClient, useWalletClient } from 'wagmi';
+import { toWei, fromWei, decodeUsd } from '@/lib/tokenUtils';
+import { useCreateOrderV2 as useCreateOrder } from '@/lib/hooks/useLimitOrderV2';
+import { fillOrderTxV2 as fillOrderTx } from '@/lib/limitOrderV2';
+import { useWalletClient, usePublicClient } from 'wagmi';
+import type { PublicClient } from 'viem';
 import { usePetState } from '@/hooks/usePetState';
+import { useCreateFeed } from '@/hooks/useSupabase';
 
 // Number formatting helper
 const fmt = (n: number, max = 6) =>
     Intl.NumberFormat('en-US', { maximumFractionDigits: max }).format(n);
 
+// Better formatting for token amounts
+const formatTokenAmount = (amount: string | number, decimals = 6) => {
+    if (!amount || amount === '0' || amount === 0) return '0';
+
+    const num = typeof amount === 'string' ? Number(amount) : amount;
+    if (isNaN(num)) return 'Invalid';
+
+    // If the number is very small, show more decimals
+    if (num < 0.000001) {
+        return num.toExponential(2);
+    }
+
+    // If the number is very large, show fewer decimals
+    if (num > 1000) {
+        return Intl.NumberFormat('en-US', {
+            maximumFractionDigits: 2,
+            minimumFractionDigits: 2
+        }).format(num);
+    }
+
+    // Normal formatting
+    return Intl.NumberFormat('en-US', {
+        maximumFractionDigits: decimals,
+        minimumFractionDigits: 0
+    }).format(num);
+};
+
 // USD helper
-const usd = (val: number) => `≈ $${fmt(val, 2)}`;
+const usd = (val: number, decimals = 2) => `≈ $${fmt(val, decimals)}`;
 
 // Short hash helper
 const shortHash = (hash: string) => `${hash.slice(0, 6)}…${hash.slice(-4)}`;
@@ -42,11 +69,20 @@ const getBaseScanUrl = (address: string) => `https://basescan.org/address/${addr
 // Interval formatting helper
 const formatInterval = (seconds: number) => {
     const hours = seconds / 3600;
+    const minutes = seconds / 60;
+
     if (hours >= 24) {
-        const days = hours / 24;
+        const days = Math.round(hours / 24);
         return `${days} day${days !== 1 ? 's' : ''}`;
+    } else if (hours >= 1) {
+        // For hours, limit to 1 decimal place max
+        const roundedHours = Math.round(hours * 10) / 10;
+        return `${roundedHours} h`;
+    } else {
+        // For minutes, show whole numbers
+        const roundedMinutes = Math.round(minutes);
+        return `${roundedMinutes} min`;
     }
-    return `${hours} h`;
 };
 
 // Grid row helper
@@ -95,7 +131,7 @@ const TokenAddress = ({ address }: { address: string }) => {
                     target="_blank"
                     rel="noopener noreferrer"
                     className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
-                    title="View on BaseScan"
+                    title="View on PolygonScan"
                 >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
@@ -107,11 +143,7 @@ const TokenAddress = ({ address }: { address: string }) => {
 };
 
 export default function TokenDcaReview() {
-    const feedDraft = useFeedStore();
-    const yieldDraft = useYieldFeedStore();
-
-    // Use the appropriate draft based on explicit mode check and data availability
-    const draft = yieldDraft.mode === 'friend' ? yieldDraft : feedDraft;
+    const draft = useFeedStore();
 
 
 
@@ -122,16 +154,41 @@ export default function TokenDcaReview() {
     const { toast } = useToast();
     const { mutateAsync: createOrder, isPending: isLoading } = useCreateOrder();
     const { feedDCACreation } = usePetState();
+    const { mutateAsync: createFeed } = useCreateFeed();
 
     // Get gas price for fee estimation
     const { data: gasPriceData } = useGasPrice();
 
+    // Get ETH price for USD conversion
+    const { data: ethPriceData } = useTokenPrice('0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee');
+
+    // Get tokens for symbol lookup
+    const { data: tokensData } = useTokens();
+    const availableTokens = useMemo(() => {
+        if (!tokensData) return [];
+        return Object.values(tokensData) as TokenMeta[];
+    }, [tokensData]);
 
 
-    // Convert human chunkIn to wei - back to simple approach
+
+    // Get source token decimals
+    const srcToken = availableTokens.find((t: TokenMeta) => t.address === draft.srcToken);
+    const srcTokenDecimals = srcToken?.decimals || 18;
+
+    // Convert human chunkIn to wei using correct decimals
     const amountWei = draft.srcToken && draft.chunkIn
-        ? toWei(draft.chunkIn.toString(), 18) // Back to 18 decimals
+        ? toWei(draft.chunkIn.toString(), srcTokenDecimals)
         : '0';
+
+    console.log('Debug amountWei calculation:', {
+        draftChunkIn: draft.chunkIn,
+        draftChunkInType: typeof draft.chunkIn,
+        srcTokenAddress: draft.srcToken,
+        srcTokenSymbol: srcToken?.symbol,
+        srcTokenDecimals: srcTokenDecimals,
+        amountWei,
+        amountWeiInHuman: fromWei(amountWei, srcTokenDecimals)
+    });
 
     // Check if same token transfer
     const isSameToken = draft.srcToken === draft.dstToken;
@@ -159,6 +216,8 @@ export default function TokenDcaReview() {
             enabled: quoteEnabled,
             retry: 3,
             retryDelay: 1000,
+            refetchOnMount: true,
+            refetchOnWindowFocus: true,
         }
     );
 
@@ -185,13 +244,35 @@ export default function TokenDcaReview() {
         }
     }
 
+    // Get destination token decimals
+    const dstToken = availableTokens.find((t: TokenMeta) => t.address === draft.dstToken);
+    const dstTokenDecimals = dstToken?.decimals || 18;
+
+    console.log('Debug destination token:', {
+        dstTokenAddress: draft.dstToken,
+        dstTokenSymbol: dstToken?.symbol,
+        dstTokenDecimals: dstTokenDecimals
+    });
+
+    // Debug ETH price
+    const ethPriceUsd = decodeUsd(ethPriceData, dstToken?.address);
+    console.log('Debug ETH price:', {
+        ethPriceData,
+        ethPriceUsd,
+        dstTokenAddress: dstToken?.address
+    });
+
     // Convert to human units (for same token, use chunkIn as takingHuman)
-    const takingHuman = isSameToken ? draft.chunkIn : fromWei(rawAmount, 18);
+    // For DCA, we want the per-fill amount, not the total amount
+    const takingHuman = isSameToken ? draft.chunkIn : fromWei(rawAmount, dstTokenDecimals);
 
     // Redirect if draft incomplete
     if (!draft.srcToken || !draft.dstToken) {
-        return <Navigate to="/yield-feed/token" replace />;
+        return <Navigate to="/dca/token-dca" replace />;
     }
+
+    // For DCA, the quote is already for the per-fill amount since we quoted chunkIn
+    const perFillQuoteAmount = isSameToken ? amountWei : rawAmount;
 
     // Compute DCA parameters for display
     const dcaParams = calculateDcaParameters({
@@ -200,8 +281,33 @@ export default function TokenDcaReview() {
         totalAmount: draft.totalAmount,
         interval: draft.interval,
         slippageTolerance: isSameToken ? 0 : draft.slippageTolerance, // Set minSlippage = 0 for same token
-        quoteAmount: isSameToken ? amountWei : rawAmount, // Use chunkIn as quoteAmount for same token
+        quoteAmount: perFillQuoteAmount, // Use per-fill quote amount
     });
+
+    // Debug logging
+    console.log('Draft chunkIn:', draft.chunkIn);
+    console.log('Draft totalAmount:', draft.totalAmount);
+    console.log('Amount Wei:', amountWei);
+    console.log('Raw Amount from Quote:', rawAmount);
+    console.log('Per Fill Quote Amount:', perFillQuoteAmount);
+    console.log('DCA Params:', dcaParams);
+    console.log('Quote Response:', quoteResponse);
+    console.log('Taking Human:', takingHuman);
+    console.log('Gas Price Data:', gasPriceData);
+
+    // Debug gas fee calculation (after dcaParams is defined)
+    if (gasPriceData && gasPriceData.medium && dcaParams) {
+        const estimatedGas = quoteResponse?.gas || 150000;
+        const gasFeeWei = Number(gasPriceData.medium.maxFeePerGas) * estimatedGas;
+        const gasFeeEth = gasFeeWei / 1e18;
+        console.log('Debug gas fee:', {
+            maxFeePerGas: gasPriceData.medium.maxFeePerGas,
+            estimatedGas,
+            gasFeeWei,
+            gasFeeEth,
+            gasFeeUsd: gasFeeEth * ethPriceUsd
+        });
+    }
 
     // Compute TWAP parameters for the new contract structure
     const twapParams = calculateTwapParameters({
@@ -210,9 +316,9 @@ export default function TokenDcaReview() {
         totalAmount: draft.totalAmount,
         interval: draft.interval,
         slippageTolerance: isSameToken ? 0 : draft.slippageTolerance, // Set minSlippage = 0 for same token
-        quoteAmount: isSameToken ? amountWei : rawAmount, // Use chunkIn as quoteAmount for same token
-        depositToAave: false, // Always false for friend mode
-        recipient: draft.mode === 'friend' ? draft.recipient as `0x${string}` : address as `0x${string}`,
+        quoteAmount: perFillQuoteAmount, // Use per-fill quote amount
+        depositToAave: false, // Always false for peer-dca mode
+        recipient: draft.mode === 'peer-dca' ? draft.recipient as `0x${string}` : address as `0x${string}`,
     });
 
     // Confirm handler: build and store limit order
@@ -222,56 +328,51 @@ export default function TokenDcaReview() {
             return;
         }
 
+        // Handle swap mode differently - immediate execution
+        if (draft.mode === 'swap') {
+            // Navigate to regular swap page with pre-filled data
+            navigate('/regular-swap');
+            return;
+        }
+
         try {
-            // 1) Check if native ETH (no approval needed)
-            const isNativeEth = draft.srcToken.toLowerCase() === '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
-
-            if (!isNativeEth && publicClient) {
-                try {
-                    toast({ title: '1️⃣ Permit 2 – sign & send' });
-
-                    const approvalAmountWei = toWei(draft.chunkIn.toString(), 18);
-
-                    const permitTx = await buildPermit2Tx(
-                        publicClient,
-                        walletClient,
-                        address as `0x${string}`,
-                        draft.srcToken as `0x${string}`,
-                        CONTRACT_ADDRESSES.LIMIT_ORDER_PROTOCOL,
-                        approvalAmountWei
-                    );
-
-                    const hash = await walletClient.sendTransaction(permitTx);
-                    toast({ description: `Permit tx sent\n${shortHash(hash)}` });
-
-                    // Wait for transaction receipt before proceeding
-                    const receipt = await publicClient.waitForTransactionReceipt({ hash });
-                    if (receipt.status === 'reverted') {
-                        throw new Error(`Permit2 transaction failed: ${hash}`);
-                    }
-
-                    toast({ description: `Permit tx confirmed\n${shortHash(hash)}` });
-                } catch (permitError) {
-                    console.error('Permit2 failed:', permitError);
-                    toast({
-                        title: 'Permit2 approval failed',
-                        description: String(permitError),
-                        variant: 'destructive'
-                    });
-                    return; // Don't proceed with order creation
-                }
-            }
-
-            // 7) Create the limit order
+            // Create the limit order (Permit2 signature is included in the order)
             try {
-                toast({ title: '2️⃣ Creating limit order…' });
+                toast({ title: '1️⃣ Creating limit order…' });
 
-                const { order } = await createOrder({
+                console.log('Creating order with tokens:', {
+                    srcToken: draft.srcToken,
+                    dstToken: draft.dstToken,
+                    srcTokenSymbol: availableTokens.find(t => t.address === draft.srcToken)?.symbol,
+                    dstTokenSymbol: availableTokens.find(t => t.address === draft.dstToken)?.symbol
+                });
+
+                // Convert to human units (for same token, use chunkIn as takingHuman)
+                const takingHumanString = isSameToken ? draft.chunkIn.toString() : fromWei(rawAmount, dstTokenDecimals);
+
+                console.log('About to create order...');
+                console.log('Order creation params:', {
+                    makerAsset: draft.srcToken,
+                    takerAsset: draft.dstToken,
+                    makingHuman: draft.chunkIn,
+                    takingHuman: takingHumanString,
+                    maker: address,
+                    srcTokenDecimals: srcTokenDecimals,
+                    dstTokenDecimals: dstTokenDecimals
+                });
+
+                const ENABLE_PERMIT2 = true; // Enable Permit2 - let's debug why it's failing
+
+                const { order, signature } = await createOrder({
+                    walletClient: walletClient!, // Pass walletClient
+                    publicClient: publicClient!, // Pass publicClient
                     makerAsset: draft.srcToken as `0x${string}`,
                     takerAsset: draft.dstToken as `0x${string}`,
                     makingHuman: draft.chunkIn,
-                    takingHuman: Number(takingHuman),
+                    takingHuman: takingHumanString, // Pass as string for precision
                     maker: address as `0x${string}`,
+                    srcTokenDecimals: srcTokenDecimals, // Pass decimals
+                    dstTokenDecimals: dstTokenDecimals, // Pass decimals
                     // Add TWAP parameters for the new contract structure
                     twapParams: {
                         interval: twapParams.twapParams.interval,
@@ -281,43 +382,234 @@ export default function TokenDcaReview() {
                     },
                     // Add Aave parameters for recipient handling
                     aaveParams: {
-                        depositToAave: false, // Always false for friend mode
-                        recipient: draft.mode === 'friend' ? draft.recipient as `0x${string}` : address as `0x${string}`,
-                        aavePool: '0x0000000000000000000000000000000000000000' as `0x${string}`,
+                        depositToAave: draft.mode === 'your-aave-yield',
+                        recipient: draft.mode === 'peer-dca' ? draft.recipient as `0x${string}` : address as `0x${string}`,
+                        aavePool: draft.mode === 'your-aave-yield' ? (draft.aavePool as `0x${string}`) || '0x0000000000000000000000000000000000000000' as `0x${string}` : '0x0000000000000000000000000000000000000000' as `0x${string}`,
                     },
+                    enablePermit2: ENABLE_PERMIT2, // Pass the flag
                 });
 
-                // 8) Store order metadata
-                const orderMeta = {
+                console.log('Order created successfully:', {
                     orderHash: order.hash,
-                    srcToken: order.makerAsset,
-                    dstToken: order.takerAsset,
-                    chunkSize: draft.chunkIn,
-                    period: draft.interval,
-                    createdAt: Date.now(),
-                    nextFillTime: Date.now() + draft.interval * 1000,
-                    endDate: draft.endDate,
-                    stopCondition: draft.stopCondition,
-                    totalAmount: draft.totalAmount,
-                };
+                    order: order,
+                    signature: signature
+                });
 
-                localStorage.setItem('orderMeta', JSON.stringify(orderMeta));
+                // 7) Check and set token allowance for Limit Order Protocol
+                const BYPASS_ALLOWANCE_CHECK = true; // Set to true to skip allowance check for testing
+
+                if (!BYPASS_ALLOWANCE_CHECK) {
+                    try {
+                        toast({ title: '2️⃣ Checking token allowance...' });
+
+                        // Check current allowance for the Limit Order Protocol contract directly
+                        const { CONTRACT_ADDRESSES } = await import('@/config/base');
+                        const LIMIT_ORDER_PROTOCOL = CONTRACT_ADDRESSES.LIMIT_ORDER_PROTOCOL;
+                        const ERC20_ABI = await import('@/abis/ERC20.json');
+
+                        const allowance = await publicClient!.readContract({
+                            address: draft.srcToken as `0x${string}`,
+                            abi: ERC20_ABI.default,
+                            functionName: 'allowance',
+                            args: [address as `0x${string}`, LIMIT_ORDER_PROTOCOL]
+                        }) as bigint;
+
+                        console.log('Current allowance:', allowance.toString());
+                        console.log('Required amount:', draft.chunkIn.toString());
+
+                        if (allowance < BigInt(draft.chunkIn)) {
+                            toast({ title: '3️⃣ Setting token allowance...' });
+
+                            // Create approval transaction directly
+                            const { encodeFunctionData } = await import('viem');
+                            const approveData = encodeFunctionData({
+                                abi: ERC20_ABI.default,
+                                functionName: 'approve',
+                                args: [LIMIT_ORDER_PROTOCOL, BigInt(draft.chunkIn)]
+                            });
+
+                            console.log('Approval transaction data:', approveData);
+
+                            // Send approval transaction
+                            const approveHash = await walletClient!.sendTransaction({
+                                to: draft.srcToken as `0x${string}`,
+                                data: approveData,
+                                value: 0n,
+                            });
+
+                            console.log('Approval transaction sent:', approveHash);
+                            toast({ title: '⏳ Waiting for approval confirmation...' });
+
+                            // Wait for approval confirmation
+                            const approveReceipt = await publicClient!.waitForTransactionReceipt({ hash: approveHash });
+                            console.log('Approval confirmed:', approveReceipt);
+                            toast({ title: '✅ Token allowance set!' });
+                        } else {
+                            console.log('✅ Sufficient allowance already exists');
+                        }
+                    } catch (allowanceError) {
+                        console.error('Allowance check/set failed:', allowanceError);
+
+                        // Show detailed error message with manual approval instructions
+                        const errorMessage = allowanceError instanceof Error ? allowanceError.message : String(allowanceError);
+                        toast({
+                            title: '❌ Allowance Check Failed',
+                            description: `Error: ${errorMessage}. Please approve ${draft.srcToken} for the Limit Order Protocol contract manually.`,
+                            variant: 'destructive'
+                        });
+
+                        // Show manual approval instructions
+                        const { CONTRACT_ADDRESSES } = await import('@/config/base');
+                        console.log('Manual approval required for:', {
+                            token: draft.srcToken,
+                            spender: CONTRACT_ADDRESSES.LIMIT_ORDER_PROTOCOL,
+                            amount: draft.chunkIn
+                        });
+
+                        throw allowanceError; // Re-throw to prevent order creation
+                    }
+                } else {
+                    console.log('⚠️ Bypassing allowance check for testing...');
+                    toast({
+                        title: '⚠️ Allowance Check Bypassed',
+                        description: 'Testing mode - proceeding without allowance check',
+                        variant: 'default'
+                    });
+                }
+
+                // 8) Submit order to LimitOrderProtocol
+                const ENABLE_ONCHAIN_SUBMISSION = true;
+                let orderHash: string | undefined;
+                if (ENABLE_ONCHAIN_SUBMISSION) {
+                    try {
+                        toast({ title: '3️⃣ Submitting order to blockchain...' });
+
+                        console.log('Submitting order to LimitOrderProtocol:', {
+                            order: order,
+                            signature: signature,
+                            account: address
+                        });
+
+                        console.log('🔍 Full order structure for debugging:', {
+                            orderHash: order.hash,
+                            permit: order.permit,
+                            interactions: order.interactions,
+                            // Note: Other fields are in typedData.message
+                        });
+
+                        // Check ETH balance for gas (using public client from hook)
+                        const ethBalance = await publicClient!.getBalance({ address: address as `0x${string}` });
+                        console.log('💰 ETH Balance for gas:', ethBalance.toString());
+                        if (ethBalance < 10000000000000000n) { // Less than 0.01 ETH
+                            console.warn('⚠️ Low ETH balance for gas fees');
+                        }
+
+                        orderHash = await fillOrderTx(walletClient!, publicClient as PublicClient, order, signature, address as `0x${string}`, BYPASS_ALLOWANCE_CHECK);
+
+                        console.log('Order submitted successfully:', orderHash);
+                        toast({
+                            title: '✅ Order Submitted!',
+                            description: `Transaction: ${shortHash(orderHash)}`
+                        });
+
+                        // Wait for order confirmation
+                        await new Promise(resolve => setTimeout(resolve, 5000));
+                    } catch (orderSubmitError) {
+                        console.error('Order submission failed:', orderSubmitError);
+                        toast({
+                            title: '❌ Order Submission Failed',
+                            description: orderSubmitError instanceof Error ? orderSubmitError.message : String(orderSubmitError),
+                            variant: 'destructive'
+                        });
+                        throw orderSubmitError; // Re-throw to prevent saving to Supabase
+                    }
+                }
+
+                // 10) Persist to Supabase for bot execution
+
+                // Persist to Supabase for bot execution
+                try {
+                    await createFeed({
+                        wallet_address: address,
+                        feed_type: 'recurring',
+                        src_token: draft.srcToken,
+                        dst_token: draft.dstToken,
+                        src_token_symbol: availableTokens.find(t => t.address === draft.srcToken)?.symbol || '',
+                        dst_token_symbol: availableTokens.find(t => t.address === draft.dstToken)?.symbol || '',
+                        from_amount: draft.chunkIn.toString(),
+                        to_amount: takingHuman.toString(),
+                        chunk_size: draft.chunkIn,
+                        period: draft.interval,
+                        status: 'active',
+                        next_fill_time: new Date(Date.now() + draft.interval * 1000).toISOString(),
+                        stop_condition: draft.stopCondition,
+                        end_date: draft.endDate,
+                        total_amount: draft.totalAmount,
+                        order_hash: order.hash,
+                        metadata: {
+                            order: order,
+                            signature: signature,
+                            twapParams: {
+                                interval: twapParams.twapParams.interval,
+                                chunks: twapParams.twapParams.chunks,
+                                chunkIn: twapParams.twapParams.chunkIn,
+                                minOut: twapParams.twapParams.minOut,
+                            },
+                            aaveParams: {
+                                depositToAave: draft.mode === 'your-aave-yield',
+                                recipient: draft.mode === 'peer-dca' ? (draft.recipient || address) : address,
+                                aavePool: draft.mode === 'your-aave-yield' ? (draft.aavePool || '') : '',
+                            },
+                            mode: draft.mode,
+                            // permit2Hash removed - Permit2 is now handled in order creation
+                            orderTransactionHash: orderHash,
+                        },
+                        bot_execution_count: 0,
+                        bot_execution_errors: [],
+                    });
+
+                    toast({
+                        title: '✅ DCA Feed Created & Saved!',
+                        description: `Order ${shortHash(order.hash)} created and persisted to database`
+                    });
+                } catch (supabaseError) {
+                    console.error('Failed to save to Supabase:', supabaseError);
+                    if (supabaseError instanceof Error) {
+                        console.error('Supabase error details:', {
+                            message: supabaseError.message,
+                            stack: supabaseError.stack,
+                            name: supabaseError.name
+                        });
+                    }
+                    toast({
+                        title: '⚠️ Order Created but Save Failed',
+                        description: `Database error: ${supabaseError instanceof Error ? supabaseError.message : String(supabaseError)}`,
+                        variant: 'destructive'
+                    });
+                }
 
                 // 9) Update pet state
                 feedDCACreation(order.hash, `${draft.srcToken}-${draft.dstToken}`);
-
-                toast({
-                    title: '✅ DCA Feed Created!',
-                    description: `Order ${shortHash(order.hash)} created successfully`
-                });
 
                 // 10) Navigate to dashboard
                 navigate('/');
             } catch (orderError) {
                 console.error('Order creation failed:', orderError);
+                if (orderError instanceof Error) {
+                    console.error('Order error details:', {
+                        message: orderError.message,
+                        stack: orderError.stack,
+                        name: orderError.name
+                    });
+                } else {
+                    console.error('Order error (unknown type):', orderError);
+                }
+
+                // Show detailed error in toast
+                const errorMessage = orderError instanceof Error ? orderError.message : String(orderError);
                 toast({
                     title: 'Order creation failed',
-                    description: String(orderError),
+                    description: errorMessage,
                     variant: 'destructive'
                 });
             }
@@ -336,10 +628,10 @@ export default function TokenDcaReview() {
             <div className="max-w-4xl mx-auto p-8">
                 <div className="mb-8">
                     <h1 className="text-4xl font-bold text-emerald-700 mb-2">
-                        Review {draft.mode === 'friend' ? 'Friend DCA' : draft.mode === 'general' ? 'General Yield' : draft.mode === 'aave' ? 'Aave Yield' : 'Token DCA'} Strategy
+                        Review {draft.mode === 'swap' ? 'Swap' : draft.mode === 'peer-dca' ? 'Peer DCA' : draft.mode === 'your-aave-yield' ? 'Aave Yield' : 'Token DCA'} Strategy
                     </h1>
                     <p className="text-gray-600 text-lg">
-                        Confirm your automated {draft.mode === 'friend' ? 'friend DCA' : draft.mode === 'general' ? 'yield farming' : draft.mode === 'aave' ? 'Aave yield' : 'token purchase'} strategy
+                        Confirm your {draft.mode === 'swap' ? 'swap' : draft.mode === 'peer-dca' ? 'peer DCA' : draft.mode === 'your-aave-yield' ? 'Aave yield' : 'token purchase'} strategy
                     </p>
                 </div>
 
@@ -355,10 +647,13 @@ export default function TokenDcaReview() {
                                     <TokenAddress address={draft.srcToken} />
                                 </Row>
                                 <Row label="Destination Token">
-                                    <TokenAddress address={draft.dstToken} />
+                                    {(() => {
+                                        const dstToken = availableTokens.find((t: TokenMeta) => t.address === draft.dstToken);
+                                        return dstToken ? dstToken.symbol : <TokenAddress address={draft.dstToken} />;
+                                    })()}
                                 </Row>
                                 <Row label="Amount per Purchase">
-                                    {fmt(draft.chunkIn)}
+                                    {usd(draft.chunkIn)}
                                 </Row>
                                 <Row label="Interval">
                                     {formatInterval(draft.interval)}
@@ -373,26 +668,35 @@ export default function TokenDcaReview() {
                                 )}
                                 {draft.stopCondition === 'total-amount' && draft.totalAmount && (
                                     <Row label="Total Amount">
-                                        {fmt(draft.totalAmount)}
+                                        {usd(draft.totalAmount)}
                                     </Row>
                                 )}
                                 <Row label="Slippage Tolerance">
                                     {isSameToken ? '0% (Same token transfer)' : `${draft.slippageTolerance}%`}
                                 </Row>
-                                {/* Show recipient for friend mode */}
-                                {draft.mode === 'friend' && draft.recipient && (
+                                {/* Show recipient for peer-dca mode */}
+                                {draft.mode === 'peer-dca' && draft.recipient && (
                                     <Row label="Recipient">
                                         <TokenAddress address={draft.recipient} />
                                     </Row>
                                 )}
-                                {draft.mode !== 'friend' && (
+                                {draft.mode !== 'peer-dca' && (
                                     <Row label="Recipient">
                                         <span className="opacity-50">Self (default)</span>
                                     </Row>
                                 )}
                                 <Row label="Deposit to Aave">
-                                    <span className="opacity-50">No</span>
+                                    {draft.mode === 'your-aave-yield' ? (
+                                        <span className="text-green-600">✓ Yes</span>
+                                    ) : (
+                                        <span className="opacity-50">No</span>
+                                    )}
                                 </Row>
+                                {draft.mode === 'your-aave-yield' && draft.aavePool && (
+                                    <Row label="Aave Pool">
+                                        <TokenAddress address={draft.aavePool} />
+                                    </Row>
+                                )}
                             </dl>
                         </CardContent>
                     </Card>
@@ -414,28 +718,62 @@ export default function TokenDcaReview() {
                                     {usd(dcaParams.totalAmountToDca)}
                                 </Row>
                                 <Row label="Min Output per Fill">
-                                    {fmt(Number(fromWei(dcaParams.minOutPerFill, 18)))}
+                                    {dcaParams.minOutPerFill && dcaParams.minOutPerFill !== '0' ?
+                                        (() => {
+                                            const tokenAmount = Number(fromWei(dcaParams.minOutPerFill, dstTokenDecimals));
+                                            const ethPriceUsd = decodeUsd(ethPriceData, dstToken?.address);
+                                            const usdAmount = ethPriceUsd > 0 ? tokenAmount * ethPriceUsd : null;
+                                            return (
+                                                <div>
+                                                    <div>{formatTokenAmount(tokenAmount)} {dstToken?.symbol}</div>
+                                                    {usdAmount && <div className="text-xs text-gray-500">≈ ${usdAmount.toFixed(2)}</div>}
+                                                </div>
+                                            );
+                                        })() :
+                                        'Calculating...'
+                                    }
                                 </Row>
                                 <Row label="TWAP Min Output">
-                                    {fmt(Number(fromWei(twapParams.twapParams.minOut.toString(), 18)))}
+                                    {twapParams.twapParams.minOut && twapParams.twapParams.minOut !== 0n ?
+                                        (() => {
+                                            const tokenAmount = Number(fromWei(twapParams.twapParams.minOut.toString(), dstTokenDecimals));
+                                            const ethPriceUsd = decodeUsd(ethPriceData, dstToken?.address);
+                                            const usdAmount = ethPriceUsd > 0 ? tokenAmount * ethPriceUsd : null;
+                                            return (
+                                                <div>
+                                                    <div>{formatTokenAmount(tokenAmount)} {dstToken?.symbol}</div>
+                                                    {usdAmount && <div className="text-xs text-gray-500">≈ ${usdAmount.toFixed(2)}</div>}
+                                                </div>
+                                            );
+                                        })() :
+                                        'Calculating...'
+                                    }
                                 </Row>
                                 <Row label="Current Quote">
-                                    {isSameToken ? `${fmt(Number(takingHuman))} (Same token transfer)` : fmt(Number(takingHuman))}
+                                    {isSameToken ?
+                                        `${formatTokenAmount(Number(takingHuman))} (Same token transfer)` :
+                                        takingHuman ? (() => {
+                                            const tokenAmount = Number(takingHuman);
+                                            const ethPriceUsd = decodeUsd(ethPriceData, dstToken?.address);
+                                            const usdAmount = ethPriceUsd > 0 ? tokenAmount * ethPriceUsd : null;
+                                            return (
+                                                <div>
+                                                    <div>{formatTokenAmount(tokenAmount)} {dstToken?.symbol}</div>
+                                                    {usdAmount && <div className="text-xs text-gray-500">≈ ${usdAmount.toFixed(2)}</div>}
+                                                </div>
+                                            );
+                                        })() : 'Calculating...'
+                                    }
                                 </Row>
-                                {!isSameToken && quoteResponse?.protocols && quoteResponse.protocols.length > 0 && (
-                                    <Row label="Route">
-                                        {quoteResponse.protocols.map((protocol, index) =>
-                                            `${protocol.name} ${Math.round(protocol.part * 100)}%${index < quoteResponse.protocols.length - 1 ? ', ' : ''}`
-                                        ).join('')}
-                                    </Row>
-                                )}
-                                {gasPriceData && (
+                                {gasPriceData && gasPriceData.medium && (
                                     <Row label="Est. Gas Fee">
-                                        {usd((gasPriceData * 150000) / 1e18)}
+                                        {usd((Number(gasPriceData.medium.maxFeePerGas) * (quoteResponse?.gas || 150000)) / 1e18, 6)}
                                     </Row>
                                 )}
-                                <Row label="Allowance Status">
-                                    <span className="text-green-600">✓ Approved</span>
+                                <Row label="Permit2 Status">
+                                    <span className="text-xs text-gray-600">
+                                        Will be generated when order is created
+                                    </span>
                                 </Row>
                             </dl>
                         </CardContent>
@@ -446,10 +784,11 @@ export default function TokenDcaReview() {
                     <Button
                         variant="outline"
                         onClick={() => navigate(
-                            draft.mode === 'friend' ? '/dca/friend' :
-                                draft.mode === 'general' ? '/yield-feed/general-yield' :
-                                    draft.mode === 'aave' ? '/yield-feed/aave-yield' :
-                                        '/yield-feed/token-dca'
+                            draft.mode === 'swap' ? '/regular-swap' :
+                                draft.mode === 'peer-dca' ? '/dca/friend' :
+                                    draft.mode === 'token-dca' ? '/dca/token-dca' :
+                                        draft.mode === 'your-aave-yield' ? '/dca/your-aave-yield' :
+                                            '/dca/token-dca'
                         )}
                         className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
                     >
@@ -460,7 +799,7 @@ export default function TokenDcaReview() {
                         disabled={isLoading}
                         className="bg-gradient-to-r from-emerald-500 to-emerald-600 text-white hover:from-emerald-600 hover:to-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed"
                     >
-                        {isLoading ? 'Creating Order...' : `Create ${draft.mode === 'friend' ? 'Friend DCA' : draft.mode === 'general' ? 'General Yield' : draft.mode === 'aave' ? 'Aave Yield' : 'DCA'} Strategy`}
+                        {isLoading ? 'Creating Order...' : `Create ${draft.mode === 'swap' ? 'Swap' : draft.mode === 'peer-dca' ? 'Peer DCA' : draft.mode === 'your-aave-yield' ? 'Aave Yield' : 'DCA'} Strategy`}
                     </Button>
                 </CardFooter>
             </div>

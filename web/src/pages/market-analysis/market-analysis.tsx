@@ -10,6 +10,7 @@ import { useAccount } from 'wagmi';
 import MarketOverview from './market-overview';
 import TokenAnalysis from './token-analysis';
 import Orderbook from './orderbook';
+import { PriceFeedWidget } from '@/pages/dashboard/price-feed-widget';
 
 interface OrderbookEntry {
     price: string;
@@ -275,6 +276,11 @@ export default function MarketAnalysis() {
                 tokens={tokens}
                 popularPairs={popularPairs}
             />
+
+            {/* Price Feed Widget */}
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                <PriceFeedWidget />
+            </div>
         </div>
     );
 } 
