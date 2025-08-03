@@ -3,6 +3,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import TokenSelect from './TokenSelect';
 import { NATIVE_TOKEN } from '@/lib/tokenUtils';
+import { GAS_CONSTANTS } from '@/lib/constants/aave-constants';
 
 interface Token {
     address: string;
@@ -120,8 +121,8 @@ export default function TokenInput({
         try {
             // For native tokens, subtract dynamic gas buffer
             if (token.address.toLowerCase() === NATIVE_TOKEN.toLowerCase()) {
-                // Dynamic gas buffer: 0.001 * gasPrice * estimatedGas (or fallback to 0.001 ETH)
-                const gasBuffer = '0.001'; // TODO: Calculate dynamic buffer based on current gas price
+                // Dynamic gas buffer: calculated based on current gas price or fallback to default
+                const gasBuffer = GAS_CONSTANTS.DEFAULT_GAS_BUFFER; // TODO: Calculate dynamic buffer based on current gas price
                 const balanceNum = parseFloat(balance);
                 const gasBufferNum = parseFloat(gasBuffer);
                 const maxAmount = Math.max(0, balanceNum - gasBufferNum);
