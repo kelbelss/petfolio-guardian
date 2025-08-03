@@ -85,9 +85,7 @@ export default function RegularSwap() {
     const { data: walletClient } = useWalletClient();
     const navigate = useNavigate();
     const { toast } = useToast();
-
     const { mutateAsync: createFeed } = useCreateFeed();
-
 
     // Track which side is being edited to prevent loops
     const [isEditingTo, setIsEditingTo] = useState(false);
@@ -136,9 +134,6 @@ export default function RegularSwap() {
         account || '',
         allRequestedTokens
     );
-
-    // Cache invalidation for balance updates
-
 
     // Get token prices for USD conversion
     const { data: rawFromPrice } = useTokenPrice(state.fromToken?.address || '');
@@ -216,8 +211,6 @@ export default function RegularSwap() {
         }
 
         try {
-
-
             // Validate all parameters before building swap params
             if (typeof state.slippage !== 'number') {
                 throw new Error('Invalid slippage settings');
@@ -259,7 +252,6 @@ export default function RegularSwap() {
 
             // Send transaction
             const hash = await walletClient.sendTransaction(tx);
-
 
             // Save swap transaction to feeds
             if (account) {
@@ -308,163 +300,163 @@ export default function RegularSwap() {
                 variant: "destructive",
             });
         }
+    };
 
-        const getSwapButtonText = () => {
-            if (!state.fromToken || !state.toToken) return 'Select tokens';
-            if (!state.fromAmount || parseFloat(state.fromAmount) === 0) return 'Enter amount';
-            if (state.fromToken.address === state.toToken.address) return 'Same token';
-            if (quoteError) return 'Quote error';
-            if (quoteLoading) return 'Loading...';
-            if (parseFloat(fromBalance) < parseFloat(state.fromAmount)) return 'Insufficient balance';
-            return 'Swap';
-        };
+    const getSwapButtonText = () => {
+        if (!state.fromToken || !state.toToken) return 'Select tokens';
+        if (!state.fromAmount || parseFloat(state.fromAmount) === 0) return 'Enter amount';
+        if (state.fromToken.address === state.toToken.address) return 'Same token';
+        if (quoteError) return 'Quote error';
+        if (quoteLoading) return 'Loading...';
+        if (parseFloat(fromBalance) < parseFloat(state.fromAmount)) return 'Insufficient balance';
+        return 'Swap';
+    };
 
-        const getSwapButtonDisabled = () => {
-            return !state.fromToken ||
-                !state.toToken ||
-                !state.fromAmount ||
-                parseFloat(state.fromAmount) === 0 ||
-                state.fromToken.address === state.toToken.address ||
-                parseFloat(fromBalance) < parseFloat(state.fromAmount) ||
-                quoteError ||
-                quoteLoading;
-        };
+    const getSwapButtonDisabled = () => {
+        return !state.fromToken ||
+            !state.toToken ||
+            !state.fromAmount ||
+            parseFloat(state.fromAmount) === 0 ||
+            state.fromToken.address === state.toToken.address ||
+            parseFloat(fromBalance) < parseFloat(state.fromAmount) ||
+            quoteError ||
+            quoteLoading;
+    };
 
-        const getErrorMessage = () => {
-            if (quoteError) return 'Failed to get quote. Please try again.';
-            if (parseFloat(fromBalance) < parseFloat(state.fromAmount)) return 'Insufficient balance';
-            return null;
-        };
+    const getErrorMessage = () => {
+        if (quoteError) return 'Failed to get quote. Please try again.';
+        if (parseFloat(fromBalance) < parseFloat(state.fromAmount)) return 'Insufficient balance';
+        return null;
+    };
 
-        return (
-            <div className="w-full bg-[#effdf4] min-h-screen flex items-center justify-center p-4">
-                <Card className="w-full max-w-md bg-white border-emerald-200 shadow-lg">
-                    <CardContent className="p-6 space-y-6">
-                        <div className="text-center">
-                            <h1 className="text-2xl font-bold text-emerald-700 mb-2">Swap Tokens</h1>
-                            <p className="text-gray-600">Exchange tokens instantly</p>
+    return (
+        <div className="w-full bg-[#effdf4] min-h-screen flex items-center justify-center p-4">
+            <Card className="w-full max-w-md bg-white border-emerald-200 shadow-lg">
+                <CardContent className="p-6 space-y-6">
+                    <div className="text-center">
+                        <h1 className="text-2xl font-bold text-emerald-700 mb-2">Swap Tokens</h1>
+                        <p className="text-gray-600">Exchange tokens instantly</p>
+                    </div>
+
+                    {/* Instant Payment Indicator */}
+                    <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg">
+                        <div className="flex items-center justify-center gap-2">
+                            <span className="text-emerald-600">⚡</span>
+                            <span className="text-sm font-medium text-emerald-700">Instant Payment Ready</span>
+                            <span className="text-emerald-600">⚡</span>
                         </div>
+                        <p className="text-xs text-emerald-600 text-center mt-1">
+                            Standard 1% slippage
+                        </p>
+                    </div>
 
-                        {/* Instant Payment Indicator */}
-                        <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg">
-                            <div className="flex items-center justify-center gap-2">
-                                <span className="text-emerald-600">⚡</span>
-                                <span className="text-sm font-medium text-emerald-700">Instant Payment Ready</span>
-                                <span className="text-emerald-600">⚡</span>
-                            </div>
-                            <p className="text-xs text-emerald-600 text-center mt-1">
-                                Standard 1% slippage
-                            </p>
-                        </div>
+                    {/* Error Banners */}
+                    {tokensError && <ErrorBanner msg="Failed to load tokens. Please refresh the page." />}
+                    {quoteError && <ErrorBanner msg={quoteError.message || "Failed to get quote. Please try again."} />}
 
-                        {/* Error Banners */}
-                        {tokensError && <ErrorBanner msg="Failed to load tokens. Please refresh the page." />}
-                        {quoteError && <ErrorBanner msg={quoteError.message || "Failed to get quote. Please try again."} />}
-
-                        {/* From Token */}
-                        <div>
-                            <label className="block text-sm font-medium text-emerald-700 mb-2">
-                                From
-                            </label>
-                            <TokenInput
-                                mode="instant"
-                                token={state.fromToken}
-                                amount={state.fromAmount}
-                                onTokenChange={(token) => {
-                                    dispatch({ type: 'SET_FROM_TOKEN', payload: token });
-                                }}
-                                onAmountChange={(amount) => dispatch({ type: 'SET_FROM_AMOUNT', payload: amount })}
-                                showMax={true}
-                                balance={fromBalance}
-                                availableTokens={availableTokens}
-                                isLoading={tokensLoading}
-                                error={tokensError ? tokensError as Error : undefined}
-                                tokenPrice={fromPriceUsd}
-                            />
-                        </div>
-
-                        {/* Swap Direction Button */}
-                        <div className="flex justify-center">
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                    dispatch({ type: 'SET_FROM_TOKEN', payload: state.toToken! });
-                                    dispatch({ type: 'SET_TO_TOKEN', payload: state.fromToken! });
-                                    dispatch({ type: 'SET_FROM_AMOUNT', payload: state.toAmount });
-                                    dispatch({ type: 'SET_TO_AMOUNT', payload: state.fromAmount });
-                                    setIsEditingTo(true); // Set editing side to true
-                                }}
-                                disabled={!state.fromToken || !state.toToken}
-                                className="rounded-full w-10 h-10 p-0"
-                            >
-                                ↓
-                            </Button>
-                        </div>
-
-                        {/* To Token */}
-                        <div>
-                            <label className="block text-sm font-medium text-emerald-700 mb-2">
-                                To
-                            </label>
-                            <TokenInput
-                                mode="instant"
-                                token={state.toToken}
-                                amount={state.toAmount}
-                                onTokenChange={(token) => dispatch({ type: 'SET_TO_TOKEN', payload: token })}
-                                onAmountChange={(amount) => dispatch({ type: 'SET_TO_AMOUNT', payload: amount })}
-                                showMax={false}
-                                hideInput={true}
-                                availableTokens={availableTokens}
-                                isLoading={tokensLoading}
-                                error={tokensError ? tokensError as Error : undefined}
-                                tokenPrice={toPriceUsd}
-                            />
-                        </div>
-
-                        {/* Settings */}
-                        <SettingsDrawer
-                            slippage={state.slippage}
-                            onSlippageChange={(value) => dispatch({ type: 'SET_SLIPPAGE', payload: value })}
+                    {/* From Token */}
+                    <div>
+                        <label className="block text-sm font-medium text-emerald-700 mb-2">
+                            From
+                        </label>
+                        <TokenInput
+                            mode="instant"
+                            token={state.fromToken}
+                            amount={state.fromAmount}
+                            onTokenChange={(token) => {
+                                dispatch({ type: 'SET_FROM_TOKEN', payload: token });
+                            }}
+                            onAmountChange={(amount) => dispatch({ type: 'SET_FROM_AMOUNT', payload: amount })}
+                            showMax={true}
+                            balance={fromBalance}
+                            availableTokens={availableTokens}
+                            isLoading={tokensLoading}
+                            error={tokensError ? new Error(tokensError.message || 'Token error') : undefined}
+                            tokenPrice={fromPriceUsd}
                         />
+                    </div>
 
-                        {/* Route Info */}
-                        <RouteInfo
-                            quote={quote as QuoteResponse}
-                            fromToken={state.fromToken || undefined}
-                            toToken={state.toToken || undefined}
-                            fromAmount={state.fromAmount}
-                        />
-
-                        {/* Swap Button */}
+                    {/* Swap Direction Button */}
+                    <div className="flex justify-center">
                         <Button
-                            onClick={handleSwap}
-                            disabled={getSwapButtonDisabled()}
-                            className="w-full bg-emerald-500 hover:bg-emerald-600 text-white py-3 text-lg font-semibold"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                                dispatch({ type: 'SET_FROM_TOKEN', payload: state.toToken! });
+                                dispatch({ type: 'SET_TO_TOKEN', payload: state.fromToken! });
+                                dispatch({ type: 'SET_FROM_AMOUNT', payload: state.toAmount });
+                                dispatch({ type: 'SET_TO_AMOUNT', payload: state.fromAmount });
+                                setIsEditingTo(true); // Set editing side to true
+                            }}
+                            disabled={!state.fromToken || !state.toToken}
+                            className="rounded-full w-10 h-10 p-0"
                         >
-                            {getSwapButtonText()}
+                            ↓
                         </Button>
+                    </div>
 
-                        {/* Error Display */}
-                        {getErrorMessage() && (
-                            <div className="text-red-600 text-sm text-center p-3 bg-red-50 rounded-lg border border-red-200">
-                                {getErrorMessage()}
-                            </div>
-                        )}
+                    {/* To Token */}
+                    <div>
+                        <label className="block text-sm font-medium text-emerald-700 mb-2">
+                            To
+                        </label>
+                        <TokenInput
+                            mode="instant"
+                            token={state.toToken}
+                            amount={state.toAmount}
+                            onTokenChange={(token) => dispatch({ type: 'SET_TO_TOKEN', payload: token })}
+                            onAmountChange={(amount) => dispatch({ type: 'SET_TO_AMOUNT', payload: amount })}
+                            showMax={false}
+                            hideInput={true}
+                            availableTokens={availableTokens}
+                            isLoading={tokensLoading}
+                            error={tokensError ? new Error(tokensError.message || 'Token error') : undefined}
+                            tokenPrice={toPriceUsd}
+                        />
+                    </div>
 
-                        {/* Back to DCA */}
-                        <div className="text-center">
-                            <Button
-                                variant="outline"
-                                onClick={() => navigate('/dca/feeds')}
-                                className="text-emerald-600 border-emerald-200 hover:bg-emerald-50"
-                            >
-                                ← Back to My Feeds
-                            </Button>
+                    {/* Settings */}
+                    <SettingsDrawer
+                        slippage={state.slippage}
+                        onSlippageChange={(value) => dispatch({ type: 'SET_SLIPPAGE', payload: value })}
+                    />
+
+                    {/* Route Info */}
+                    <RouteInfo
+                        quote={quote as QuoteResponse}
+                        fromToken={state.fromToken || undefined}
+                        toToken={state.toToken || undefined}
+                        fromAmount={state.fromAmount}
+                    />
+
+                    {/* Swap Button */}
+                    <Button
+                        onClick={handleSwap}
+                        disabled={getSwapButtonDisabled()}
+                        className="w-full bg-emerald-500 hover:bg-emerald-600 text-white py-3 text-lg font-semibold"
+                    >
+                        {getSwapButtonText()}
+                    </Button>
+
+                    {/* Error Display */}
+                    {getErrorMessage() && (
+                        <div className="text-red-600 text-sm text-center p-3 bg-red-50 rounded-lg border border-red-200">
+                            {getErrorMessage()}
                         </div>
-                    </CardContent>
-                </Card>
-            </div>
-        );
-    }
+                    )}
+
+                    {/* Back to DCA */}
+                    <div className="text-center">
+                        <Button
+                            variant="outline"
+                            onClick={() => navigate('/dca/feeds')}
+                            className="text-emerald-600 border-emerald-200 hover:bg-emerald-50"
+                        >
+                            ← Back to My Feeds
+                        </Button>
+                    </div>
+                </CardContent>
+            </Card>
+        </div>
+    );
 }
