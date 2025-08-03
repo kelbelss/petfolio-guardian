@@ -69,7 +69,7 @@ export const BASE_TOKENS = {
 
 export const CONTRACT_ADDRESSES = {
   // Limit Order Protocol (1inch Router)
-  LIMIT_ORDER_PROTOCOL: '0x111111125421ca6dC452d289314280a0f8842A65' as `0x${string}`,
+  LIMIT_ORDER_PROTOCOL: '0x111111125421cA6dc452d289314280a0f8842A65' as `0x${string}`,
   
   // Your custom contracts (update these with your deployed addresses)
   TWAP_DCA: '0x0B5c1388D02346820E40aDa23754baD5d6702E3C' as `0x${string}`,

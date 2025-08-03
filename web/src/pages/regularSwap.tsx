@@ -9,7 +9,6 @@ import { toWei, fromWei, toCanonical, NATIVE_TOKEN, decodeUsd } from '@/lib/toke
 import { COMMON_TOKENS } from '@/lib/constants';
 import TokenInput from '@/components/TokenInput/TokenInput';
 import SettingsDrawer from '@/components/SettingsDrawer';
-import RouteInfo from '@/components/RouteInfo';
 import { ErrorBanner } from '@/components/ErrorBanner';
 import ConnectButton from '@/components/ConnectButton';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -125,6 +124,14 @@ export default function RegularSwap() {
 
         // v1.3 API format: direct object with address keys
         const allTokens = Object.values(tokensData) as TokenMeta[];
+
+        // Debug: Log some available tokens
+        console.log('🔍 Available tokens on Base:', allTokens.slice(0, 10).map(t => ({
+            symbol: t.symbol,
+            address: t.address,
+            name: t.name
+        })));
+
         return allTokens;
     }, [tokensData, tokensError, tokensLoading]);
 
@@ -202,39 +209,50 @@ export default function RegularSwap() {
 
     // Handle swap execution
     const handleSwap = async () => {
-        console.log('Starting swap with params:', {
+        console.log('🚀 Starting regular swap with params:', {
             fromToken: state.fromToken?.address,
             toToken: state.toToken?.address,
             fromAmount: state.fromAmount,
             account,
-            walletClient: !!walletClient
+            walletClient: !!walletClient,
+            publicClient: !!publicClient
         });
 
         if (!state.fromToken || !state.toToken || !state.fromAmount || !account || !walletClient) {
-            console.error('Missing required swap parameters:', {
+            console.error('❌ Missing required swap parameters:', {
                 fromToken: state.fromToken?.address,
                 toToken: state.toToken?.address,
                 fromAmount: state.fromAmount,
                 account,
                 walletClient: !!walletClient
             });
+            toast({
+                title: "Missing parameters",
+                description: "Please check your wallet connection and token selection",
+                variant: "destructive",
+            });
             return;
         }
 
         try {
+            toast({
+                title: "🔄 Starting swap...",
+                description: "Preparing transaction",
+            });
+
             // Validate all parameters before building swap params
             if (typeof state.slippage !== 'number') {
                 throw new Error('Invalid slippage settings');
             }
 
-            console.log('Converting amount to wei:', {
+            console.log('💰 Converting amount to wei:', {
                 amount: state.fromAmount,
                 decimals: state.fromToken.decimals,
                 tokenAddress: state.fromToken.address
             });
 
             const fromAmountWei = toWei(state.fromAmount, state.fromToken.decimals);
-            console.log('Amount in wei:', fromAmountWei);
+            console.log('✅ Amount in wei:', fromAmountWei);
 
             // Check if amount is too small (less than 1 wei)
             if (BigInt(fromAmountWei) < 1n) {
@@ -242,20 +260,29 @@ export default function RegularSwap() {
             }
 
             // Check token allowance before swap
-            console.log('Checking token allowance...');
+            console.log('🔍 Checking token allowance...');
             try {
+                toast({
+                    title: "🔍 Checking allowance...",
+                    description: "Verifying token permissions",
+                });
+
                 const allowanceData = await getAllowance(state.fromToken.address, account);
                 const currentAllowance = BigInt(allowanceData.allowance || '0');
                 const requiredAmount = BigInt(fromAmountWei);
 
-                console.log('Allowance check:', {
+                console.log('📊 Allowance check:', {
                     currentAllowance: currentAllowance.toString(),
                     requiredAmount: requiredAmount.toString(),
                     hasEnoughAllowance: currentAllowance >= requiredAmount
                 });
 
                 if (currentAllowance < requiredAmount) {
-                    console.log('Insufficient allowance, getting approval transaction...');
+                    console.log('⚠️ Insufficient allowance, getting approval transaction...');
+                    toast({
+                        title: "🔐 Approving token...",
+                        description: "Setting token allowance",
+                    });
 
                     // Get approval transaction
                     const approveData = await getApproveTransaction(state.fromToken.address, fromAmountWei);
@@ -266,42 +293,65 @@ export default function RegularSwap() {
                         gas: approveData.tx.gas ? BigInt(approveData.tx.gas) : undefined,
                     };
 
-                    console.log('Sending approval transaction:', approveTx);
+                    console.log('📝 Sending approval transaction:', approveTx);
                     const approveHash = await walletClient.sendTransaction(approveTx);
-                    console.log('Approval transaction sent:', approveHash);
+                    console.log('✅ Approval transaction sent:', approveHash);
+
+                    toast({
+                        title: "⏳ Waiting for approval...",
+                        description: `Hash: ${approveHash.slice(0, 10)}...`,
+                    });
 
                     // Wait for approval to be mined before proceeding
                     if (!publicClient) {
                         throw new Error('Public client not available');
                     }
                     await publicClient.waitForTransactionReceipt({ hash: approveHash });
-                    console.log('Approval transaction confirmed');
+                    console.log('✅ Approval transaction confirmed');
+
+                    toast({
+                        title: "✅ Approval confirmed!",
+                        description: "Proceeding with swap",
+                    });
                 } else {
-                    console.log('Sufficient allowance already exists');
+                    console.log('✅ Sufficient allowance already exists');
                 }
             } catch (allowanceError) {
-                console.error('Allowance check failed:', allowanceError);
+                console.error('❌ Allowance check failed:', allowanceError);
                 // Continue with swap - 1inch might handle it
-                console.log('Continuing with swap despite allowance check failure');
+                console.log('⚠️ Continuing with swap despite allowance check failure');
+                toast({
+                    title: "⚠️ Allowance check failed",
+                    description: "Continuing with swap...",
+                });
             }
 
             const slippagePercent = state.slippage.toString();
 
             // Build swap parameters for 1inch API (matching official docs)
+            const isNativeToken = state.fromToken.address.toLowerCase() === NATIVE_TOKEN.toLowerCase();
             const swapParams = {
                 src: toCanonical(state.fromToken.address),
                 dst: toCanonical(state.toToken.address),
                 amount: fromAmountWei,
                 from: account,
-                slippage: slippagePercent
+                slippage: slippagePercent,
+                receiver: account,
+                // Use disableEstimate for native ETH swaps to avoid 400 errors
+                disableEstimate: isNativeToken ? 'true' : 'false'
             };
 
-            console.log('Token addresses:', {
+            console.log('🔗 Token addresses:', {
                 fromTokenOriginal: state.fromToken.address,
                 fromTokenCanonical: toCanonical(state.fromToken.address),
                 toTokenOriginal: state.toToken.address,
                 toTokenCanonical: toCanonical(state.toToken.address)
             });
+
+            // Validate token addresses
+            if (!swapParams.src || !swapParams.dst) {
+                throw new Error('Invalid token addresses');
+            }
 
             // Debug swap parameters
             console.group('🔍 Swap Parameters Debug');
@@ -326,9 +376,17 @@ export default function RegularSwap() {
             // Get swap transaction from 1inch API
             let swapData;
             try {
+                toast({
+                    title: "📡 Getting swap quote...",
+                    description: "Fetching best route",
+                });
+
+                console.log('🌐 Calling 1inch API for swap transaction...');
+                console.log('📋 Swap params being sent:', swapParams);
                 swapData = await getSwapTx(swapParams);
+                console.log('✅ Swap data received:', swapData);
             } catch (apiError) {
-                console.error('1inch API Error:', apiError);
+                console.error('❌ 1inch API Error:', apiError);
 
                 // Handle specific API errors
                 const errorMessage = apiError instanceof Error ? apiError.message : String(apiError);
@@ -341,6 +399,12 @@ export default function RegularSwap() {
                 }
                 if (errorMessage.includes('Insufficient allowance')) {
                     throw new Error('Token approval required. Please approve the token first.');
+                }
+                if (errorMessage.includes('No content returned')) {
+                    throw new Error('No swap route found. Try different tokens or amounts.');
+                }
+                if (errorMessage.includes('400')) {
+                    throw new Error('Invalid swap parameters. Please check token addresses and amounts.');
                 }
 
                 throw apiError;
@@ -361,8 +425,22 @@ export default function RegularSwap() {
                     : undefined
             };
 
+            console.log('📝 Prepared transaction:', tx);
+
             // Send transaction
+            toast({
+                title: "🚀 Sending transaction...",
+                description: "Please confirm in your wallet",
+            });
+
+            console.log('💸 Sending swap transaction...');
             const hash = await walletClient.sendTransaction(tx);
+            console.log('✅ Swap transaction sent:', hash);
+
+            toast({
+                title: "⏳ Transaction sent!",
+                description: `Hash: ${hash.slice(0, 10)}...`,
+            });
 
             // Save to feedStore
             setDraft({
@@ -376,6 +454,7 @@ export default function RegularSwap() {
             // Save swap transaction to feeds
             if (account) {
                 try {
+                    console.log('💾 Saving swap to database...');
                     await createFeed({
                         wallet_address: account,
                         feed_type: 'swap',
@@ -402,21 +481,21 @@ export default function RegularSwap() {
                     });
 
                     toast({
-                        title: "Swap completed!",
+                        title: "🎉 Swap completed!",
                         description: `Transaction hash: ${hash.slice(0, 10)}...`,
                     });
 
                     // Navigate to feeds page
                     navigate('/dca/feeds');
                 } catch (error) {
-                    console.error('Failed to save swap to Supabase:', error);
+                    console.error('❌ Failed to save swap to Supabase:', error);
                     // Still navigate even if save fails
                     navigate('/dca/feeds');
                 }
             }
 
         } catch (error) {
-            console.error('Swap error:', error);
+            console.error('❌ Swap error:', error);
 
             // Enhanced error messages
             let userMessage = 'Swap failed';
@@ -435,7 +514,7 @@ export default function RegularSwap() {
             }
 
             toast({
-                title: "Swap failed",
+                title: "❌ Swap failed",
                 description: userMessage,
                 variant: "destructive",
             });
@@ -559,14 +638,6 @@ export default function RegularSwap() {
                     <SettingsDrawer
                         slippage={state.slippage}
                         onSlippageChange={(value) => dispatch({ type: 'SET_SLIPPAGE', payload: value })}
-                    />
-
-                    {/* Route Info */}
-                    <RouteInfo
-                        quote={quote as QuoteResponse}
-                        fromToken={state.fromToken || undefined}
-                        toToken={state.toToken || undefined}
-                        fromAmount={state.fromAmount}
                     />
 
                     {/* Swap Button */}

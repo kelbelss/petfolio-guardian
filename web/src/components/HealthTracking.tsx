@@ -17,11 +17,12 @@ export default function HealthTracking() {
     const [showDetails, setShowDetails] = useState(false);
 
     // Update health when component mounts or feeds change
-    React.useEffect(() => {
-        if (address) {
-            calculateAndUpdateHealth(address);
-        }
-    }, [address, feedsData, calculateAndUpdateHealth]);
+    // TEMPORARILY DISABLED FOR DEMO - MANUAL HEALTH SETTING
+    // React.useEffect(() => {
+    //     if (address) {
+    //         calculateAndUpdateHealth(address);
+    //     }
+    // }, [address, feedsData, calculateAndUpdateHealth]);
 
     // Use health data from Supabase
     const healthData = useMemo(() => {

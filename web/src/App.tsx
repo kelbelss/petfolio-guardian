@@ -47,8 +47,8 @@ export default function App() {
           <Link to="/market-analysis" className="text-emerald-600 hover:text-emerald-700 text-lg font-medium">
             Market Analysis
           </Link>
-          <Link to="/how-it-works" className="text-emerald-600 hover:text-emerald-700 text-lg font-medium">
-            How It Works
+          <Link to="/about" className="text-emerald-600 hover:text-emerald-700 text-lg font-medium">
+            About
           </Link>
         </nav>
         <div className="flex items-center gap-4">
@@ -76,7 +76,7 @@ export default function App() {
           <Route path="/dca/peer-dca" element={<PeerDcaWizard />} />
           <Route path="/dca/token-dca" element={<TokenDcaWizard />} />
           <Route path="/test-input" element={<TestInput />} />
-          <Route path="/how-it-works" element={<HowItWorks />} />
+          <Route path="/about" element={<HowItWorks />} />
           <Route path="*" element={<div className="max-w-3xl mx-auto p-6">Not Found</div>} />
         </Routes>
       </ErrorBoundary>

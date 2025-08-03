@@ -83,6 +83,7 @@ export default function Dashboard() {
         }
     };
 
+
     return (
         <div className="w-full bg-[#effdf4] min-h-screen">
             <div className="max-w-screen-2xl mx-auto py-12">
@@ -461,7 +462,7 @@ function PetHappinessBar() {
         }
 
         const healthRecord = healthRecordData.data;
-        const health = healthRecord.current_health;
+        const health = healthRecord.current_health || 8.0; // Default to 8.0 if no health data
         const healthPercentage = (health / 10) * 100;
 
         return {

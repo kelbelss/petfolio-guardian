@@ -31,23 +31,39 @@ export function getNetworkName(chainId: number): string {
   return NETWORK_NAMES[chainId] || `Chain ${chainId}`;
 }
 
-// Helper function to check if network supports history API
-export function supportsHistoryAPI(): boolean {
-  return false; // No history API support on Base
+// Helper function to check if chain is supported
+export function isSupportedChain(chainId: number): boolean {
+  return Object.values(NETWORKS).includes(chainId as typeof NETWORKS[keyof typeof NETWORKS]);
 }
 
-// Token addresses for Base chain
-export const TOKEN_ADDRESSES = {
-  BASE: {
-    USDC: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
-    USDT: '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9',
-    WBTC: '0x2Ae3F1Ec7F1F5012CFEab0185bfc7aa3cf0DEc22',
-    WETH: '0x4200000000000000000000000000000000000006',
-    DAI: '0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb',
+// Helper function to get default RPC URL for a chain
+export function getDefaultRpcUrl(chainId: number): string {
+  switch (chainId) {
+    case NETWORKS.BASE:
+      return 'https://mainnet.base.org';
+    default:
+      throw new Error(`No default RPC URL for chain ${chainId}`);
   }
-} as const;
+}
 
-export function getTokenAddress(token: keyof typeof TOKEN_ADDRESSES.BASE): string {
-  // Always return Base addresses
-  return TOKEN_ADDRESSES.BASE[token];
+// Helper function to get block explorer URL for a chain
+export function getBlockExplorerUrl(chainId: number): string {
+  switch (chainId) {
+    case NETWORKS.BASE:
+      return 'https://basescan.org';
+    default:
+      throw new Error(`No block explorer URL for chain ${chainId}`);
+  }
+}
+
+// Helper function to get block explorer URL for an address
+export function getBlockExplorerAddressUrl(chainId: number, address: string): string {
+  const baseUrl = getBlockExplorerUrl(chainId);
+  return `${baseUrl}/address/${address}`;
+}
+
+// Helper function to get block explorer URL for a transaction
+export function getBlockExplorerTxUrl(chainId: number, txHash: string): string {
+  const baseUrl = getBlockExplorerUrl(chainId);
+  return `${baseUrl}/tx/${txHash}`;
 } 

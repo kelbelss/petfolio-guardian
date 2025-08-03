@@ -53,7 +53,7 @@ export async function getQuote(src: string, dst: string, amount: string, include
   const url = ix(`/swap/v6.0/${CHAIN}/quote?${params}`);
   
   // Debug the API call
-  console.log('1inch API Call:', {
+  console.log('🌐 1inch Quote API Call:', {
     src,
     dst,
     amount,
@@ -63,11 +63,18 @@ export async function getQuote(src: string, dst: string, amount: string, include
   const response = await fetch(url, { headers: HEADERS });
   
   if (!response.ok) {
-    throw new Error(`Quote failed: ${response.status} ${response.statusText}`);
+    const txt = await response.text();
+    console.error('❌ Quote API error:', {
+      status: response.status,
+      statusText: response.statusText,
+      body: txt,
+      url: url.toString()
+    });
+    throw new Error(`Quote failed: ${response.status} ${response.statusText} - ${txt}`);
   }
   
   const result = await response.json();
-  console.log('1inch API Response:', result);
+  console.log('✅ 1inch Quote Response:', result);
   
   return result;
 }
@@ -98,37 +105,35 @@ export async function getApproveTransaction(tokenAddress: string, amount: string
 }
 
 export async function getSwapTx(params: Record<string, string>) {
-  // Use the exact parameter names from the official docs
-  const swapParams = {
-    src: params.src,
-    dst: params.dst,
-    amount: params.amount,
-    from: params.from,
-    origin: params.from, // Required parameter - same as from address
-    slippage: params.slippage,
-    disableEstimate: params.disableEstimate || "false",
-    allowPartialFill: params.allowPartialFill || "false"
-  };
+  const qs = new URLSearchParams(params).toString();
+  const url = ix(`/swap/v6.0/${CHAIN}/swap?${qs}`);
+  console.log('🌐 1inch swap URL:', url);
+  console.log('📋 Swap parameters:', params);
   
-  const qs = new URLSearchParams(swapParams).toString();
-  const url = ix(`/swap/v6.1/${CHAIN}/swap?${qs}`);
-  console.log('1inch swap URL:', url);
   const res = await fetch(url, { headers: HEADERS });
 
   if (!res.ok) {
     // surface the JSON body so we know **why** it failed
     const txt = await res.text();
-    console.error('1inch API error response:', {
+    console.error('❌ 1inch API error response:', {
       status: res.status,
       statusText: res.statusText,
-      body: txt
+      body: txt,
+      url: url
     });
-    let msg   = txt;
-    try   { msg = JSON.parse(txt).description || txt; }  // 1inch returns {error,description}
-    catch { /* fallback to raw text */ }
+    let msg = txt;
+    try { 
+      const parsed = JSON.parse(txt);
+      msg = parsed.description || parsed.error || txt; 
+    } catch { 
+      /* fallback to raw text */ 
+    }
     throw new Error(`Swap failed: ${res.status} – ${msg}`);
   }
-  return res.json();
+  
+  const result = await res.json();
+  console.log('✅ 1inch swap response:', result);
+  return result;
 }
 
 /** GET /tokens - get token list */

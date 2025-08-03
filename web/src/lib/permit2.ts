@@ -35,12 +35,20 @@ export async function buildPermit2Tx(
 
   /* 2 — describe permit & build EIP-712 struct */
   const deadline = Math.floor(Date.now() / 1000) + deadlineSec;
+  
+  // Ensure consistent permit object with BigInts for SDK and on-chain call
   const permit = {
-    permitted : { token, amount: amountWei },
+    permitted : { 
+      token, 
+      amount: BigInt(amountWei)  // Convert to BigInt for consistency
+    },
     spender,
     nonce,
     deadline
   };
+  
+  console.log('Permit object structure:', permit);
+  
   const { domain, types, values } = SignatureTransfer.getPermitData(
     permit, CONTRACT_ADDRESSES.PERMIT2, BASE_NETWORK.id
   );
@@ -60,11 +68,91 @@ export async function buildPermit2Tx(
   });
 
   /* 4 — encode on-chain call to `permitTransferFrom` */
+  // The function expects: permitTransferFrom(TokenPermissions permitted, address spender, uint256 nonce, uint256 deadline, bytes signature)
   const data = encodeFunctionData({
     abi: Permit2ABI,
     functionName: 'permitTransferFrom',
-    args: [ permit, signature ]
+    args: [ 
+      permit.permitted,  // TokenPermissions struct
+      permit.spender,    // address
+      permit.nonce,      // uint256
+      permit.deadline,   // uint256
+      signature         // bytes
+    ]
   });
 
   return { to: CONTRACT_ADDRESSES.PERMIT2, data };
+}
+
+/** Generate Permit2 signature bytes for order permit field */
+export async function buildPermit2Signature(
+  publicClient : PublicClient,        // viem public client (read-only)
+  wallet       : WalletClient,        // connected signer
+  owner        : `0x${string}`,
+  token        : `0x${string}`,
+  spender      : `0x${string}`,
+  amountWei    : string,              // decimal string
+  deadlineSec  = 60 * 60              // 1 h from now
+): Promise<`0x${string}`> {
+  /* 1 — fetch nonce */
+  const nonce = await getPermit2Nonce(publicClient, owner);
+
+  /* 2 — describe permit & build EIP-712 struct */
+  const deadline = Math.floor(Date.now() / 1000) + deadlineSec;
+  
+  const permit = {
+    permitted : { 
+      token, 
+      amount: BigInt(amountWei)
+    },
+    spender,
+    nonce,
+    deadline
+  };
+  
+  // Debug Permit2 permit
+  console.log('🔍 Permit2 Permit Debug:', {
+    token,
+    amount: amountWei,
+    amountBigInt: BigInt(amountWei),
+    spender,
+    nonce,
+    deadline
+  });
+  
+  const { domain, types, values } = SignatureTransfer.getPermitData(
+    permit, CONTRACT_ADDRESSES.PERMIT2, BASE_NETWORK.id
+  );
+  
+  console.log('🔍 Permit2 Domain Debug:', {
+    name: domain.name,
+    version: domain.version,
+    chainId: domain.chainId,
+    verifyingContract: domain.verifyingContract
+  });
+  
+  console.log('🔍 Permit2 Types Debug:', {
+    types: Object.keys(types),
+    primaryType: 'PermitTransferFrom'
+  });
+  
+  console.log('🔍 Permit2 Values Debug:', {
+    values: values
+  });
+
+  /* 3 — sign and return signature bytes */
+  const signature = await wallet.signTypedData({
+    account: owner,
+    domain: {
+      name: domain.name,
+      version: domain.version,
+      chainId: Number(domain.chainId),
+      verifyingContract: domain.verifyingContract as `0x${string}`
+    },
+    types,
+    primaryType: 'PermitTransferFrom',
+    message: values as unknown as Record<string, unknown>
+  });
+
+  return signature;
 } 

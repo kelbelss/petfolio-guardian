@@ -1,6 +1,70 @@
 [
   {
     "inputs": [
+      {
+        "components": [
+          {
+            "internalType": "address",
+            "name": "makerAsset",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "takerAsset",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "makingAmount",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "takingAmount",
+            "type": "uint256"
+          },
+          { "internalType": "address", "name": "maker", "type": "address" },
+          { "internalType": "address", "name": "receiver", "type": "address" },
+          { "internalType": "uint256", "name": "salt", "type": "uint256" },
+          {
+            "internalType": "uint256",
+            "name": "expiration",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "makerTraits",
+            "type": "uint256"
+          }
+        ],
+        "internalType": "struct IOrderMixin.Order",
+        "name": "order",
+        "type": "tuple"
+      },
+      { "internalType": "bytes32", "name": "r", "type": "bytes32" },
+      { "internalType": "bytes32", "name": "vs", "type": "bytes32" },
+      { "internalType": "uint256", "name": "amount", "type": "uint256" },
+      { "internalType": "uint256", "name": "takerTraits", "type": "uint256" }
+    ],
+    "name": "fillOrder",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "filledMakingAmount",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "filledTakingAmount",
+        "type": "uint256"
+      },
+      { "internalType": "uint256", "name": "orderHash", "type": "uint256" }
+    ],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [
       { "internalType": "bytes", "name": "order", "type": "bytes" },
       { "internalType": "bytes", "name": "signature", "type": "bytes" },
       { "internalType": "bytes", "name": "interaction", "type": "bytes" },
@@ -36,6 +100,54 @@
         "type": "uint256"
       }
     ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "components": [
+          {
+            "internalType": "address",
+            "name": "makerAsset",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "takerAsset",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "makingAmount",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "takingAmount",
+            "type": "uint256"
+          },
+          { "internalType": "address", "name": "maker", "type": "address" },
+          { "internalType": "address", "name": "receiver", "type": "address" },
+          { "internalType": "uint256", "name": "salt", "type": "uint256" },
+          {
+            "internalType": "uint256",
+            "name": "expiration",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "makerTraits",
+            "type": "uint256"
+          }
+        ],
+        "internalType": "struct IOrderMixin.Order",
+        "name": "order",
+        "type": "tuple"
+      }
+    ],
+    "name": "getOrderHash",
+    "outputs": [{ "internalType": "bytes32", "name": "", "type": "bytes32" }],
     "stateMutability": "view",
     "type": "function"
   }

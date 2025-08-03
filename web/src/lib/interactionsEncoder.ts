@@ -20,6 +20,7 @@ export interface AaveParams {
 export interface InteractionsParams {
   twapParams?: TwapParams;
   aaveParams?: AaveParams;
+  // permit2Signature?: `0x${string}`; // REMOVED: Permit2 signature is passed separately to fillOrderTo
 }
 
 /**
@@ -34,6 +35,7 @@ export function encodeInteractions(params: InteractionsParams): `0x${string}` {
       recipient: '0x0000000000000000000000000000000000000000' as `0x${string}`,
       aavePool: '0x0000000000000000000000000000000000000000' as `0x${string}`,
     }
+    // permit2Signature // REMOVED: No longer destructured here
   } = params;
 
   // Default TWAP params if not provided
@@ -69,8 +71,46 @@ export function encodeInteractions(params: InteractionsParams): `0x${string}` {
   );
 
   // Prefix with hook address - TWAP_DCA is the correct hook receiver
-  const hookAddress = CONTRACT_ADDRESSES.TWAP_DCA;
-  return `${hookAddress}${encodedParams.slice(2)}` as `0x${string}`;
+  const interactions = `${CONTRACT_ADDRESSES.TWAP_DCA}${encodedParams.slice(2)}`;
+  
+  // Add explicit debug logs to confirm execution path
+  console.log('--- interactionsEncoder Debug Check ---');
+  console.log('Initial interactions (before any potential Permit2 append):', interactions);
+  console.log('Initial interactions length:', interactions.length);
+  console.log('TWAP_DCA address:', CONTRACT_ADDRESSES.TWAP_DCA);
+  console.log('TWAP_DCA address length:', CONTRACT_ADDRESSES.TWAP_DCA.length);
+  console.log('Encoded params:', encodedParams);
+  console.log('Encoded params length:', encodedParams.length);
+  console.log('Encoded params slice(2):', encodedParams.slice(2));
+  console.log('Encoded params slice(2) length:', encodedParams.slice(2).length);
+  
+  // Make ABSOLUTELY SURE the Permit2 concatenation block below is removed/commented out
+  // if (permit2Signature && permit2Signature !== "0x") {
+  //   const permit2Interaction = `${CONTRACT_ADDRESSES.PERMIT2}${permit2Signature.slice(2)}`;
+  //   interactions += permit2Interaction.slice(2);
+  // }
+
+  console.log('Final interactions (after potential Permit2 append check):', interactions);
+  console.log('Final interactions length:', interactions.length);
+  console.log('Expected length (40 chars for address + 352 chars for params + 0x):', 40 + 352 + 2);
+  console.log('--- End interactionsEncoder Debug Check ---');
+  
+  console.log('🔍 Interactions Debug:', {
+    twapDcaAddress: CONTRACT_ADDRESSES.TWAP_DCA,
+    encodedParamsLength: encodedParams.length,
+    encodedParams: encodedParams,
+    interactionsLength: interactions.length,
+    interactions: interactions,
+    finalLength: interactions.length
+  });
+  
+  // REMOVED: Do NOT add Permit2 signature to interactions. It's a separate argument in fillOrderTo.
+  // if (permit2Signature && permit2Signature !== "0x") {
+  //   const permit2Interaction = `${CONTRACT_ADDRESSES.PERMIT2}${permit2Signature.slice(2)}`;
+  //   interactions += permit2Interaction.slice(2);
+  // }
+  
+  return interactions as `0x${string}`;
 }
 
 /**
@@ -102,4 +142,35 @@ export function encodeTwapAaveInteractions(
  */
 export function encodeDefaultInteractions(): `0x${string}` {
   return encodeInteractions({});
+}
+
+/**
+ * Test function to verify interactions encoding
+ */
+export function testInteractionsEncoding() {
+  console.log('🧪 Testing interactions encoding...');
+  
+  const testParams = {
+    twapParams: {
+      interval: 3600,
+      chunks: 1,
+      chunkIn: 1000000000000000000n,
+      minOut: 900000000000000000n,
+    },
+    aaveParams: {
+      depositToAave: false,
+      recipient: '0x0000000000000000000000000000000000000000' as `0x${string}`,
+      aavePool: '0x0000000000000000000000000000000000000000' as `0x${string}`,
+    }
+  };
+  
+  const result = encodeInteractions(testParams);
+  console.log('🧪 Test result:', {
+    result,
+    length: result.length,
+    expectedLength: 40 + 352 + 2, // address + params + 0x
+    isCorrectLength: result.length === (40 + 352 + 2)
+  });
+  
+  return result;
 } 

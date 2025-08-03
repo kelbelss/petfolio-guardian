@@ -438,6 +438,22 @@ export default function MyFeeds() {
                         </Link>
                     </div>
                 </div>
+
+                {/* Pet Happiness System */}
+                <Card className="mb-8 border-purple-200">
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-3 text-purple-700">
+                            🐾 Pet Happiness System
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <p className="text-sm text-gray-600">
+                            Your virtual pet's happiness is directly tied to your DCA trading activity.
+                            Each successful trade feeds your pet and increases their happiness level.
+                        </p>
+                    </CardContent>
+                </Card>
+
                 <FilterTabs activeFilter={activeFilter} onFilterChange={setActiveFilter} />
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     {filteredFeeds.map(feed => (

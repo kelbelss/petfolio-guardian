@@ -141,6 +141,9 @@ export function calculateTwapParameters(params: TwapCalculationParams): TwapCalc
   const dcaResult = calculateDcaParameters(params);
   
   // Convert chunkIn to bigint for TWAP params
+  // Note: This should use the source token decimals, but we don't have access to them here
+  // The chunkIn is already in human units, so we need to convert to wei
+  // For now, we'll use 18 decimals as a fallback, but this should be fixed
   const chunkInBigInt = BigInt(toWei(params.chunkIn.toString(), 18));
   
   // Calculate TWAP parameters
