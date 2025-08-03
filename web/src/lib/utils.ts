@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
+import { parseUnits, formatUnits } from 'viem'
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -12,12 +13,12 @@ import { COMMON_TOKENS, FALLBACK_TOKENS } from './constants';
 
 // Token decimal mapping for Base network
 const TOKEN_DECIMALS: Record<string, number> = {
-  [COMMON_TOKENS.WETH]: 18,
-  [COMMON_TOKENS.USDC]: 6,
-  [COMMON_TOKENS.DAI]: 18,
-  [COMMON_TOKENS.USDT]: 6,
-  [COMMON_TOKENS.WBTC]: 8,
-  [COMMON_TOKENS.LINK]: 18,
+  [COMMON_TOKENS[0].address]: 18, // ETH
+  [COMMON_TOKENS[1].address]: 6,  // USDC
+  [COMMON_TOKENS[2].address]: 18, // DAI
+  [COMMON_TOKENS[3].address]: 6,  // USDT
+  [COMMON_TOKENS[4].address]: 8,  // WBTC
+  [COMMON_TOKENS[5].address]: 18, // UNI
 };
 
 /**
@@ -40,19 +41,30 @@ export function getTokenDecimals(tokenAddress: string): number {
 /**
  * Convert human-readable amount to wei (token's smallest unit)
  */
-export function toWei(amount: string | number, tokenAddress: string, decimals?: number): string {
-  const tokenDecimals = decimals !== undefined ? decimals : getTokenDecimals(tokenAddress);
-  const amountNum = typeof amount === 'string' ? parseFloat(amount) : amount;
-  return (amountNum * Math.pow(10, tokenDecimals)).toString();
+export function toWei(amount: string | number, decimals: number): string {
+  try {
+    // Ensure amount is a string to handle large numbers and scientific notation
+    const amountStr = typeof amount === 'number' ? amount.toString() : amount;
+    // Use parseUnits from viem for proper decimal handling
+    return parseUnits(amountStr, decimals).toString();
+  } catch (error) {
+    console.error('Error in toWei conversion:', error);
+    return '0';
+  }
 }
 
 /**
  * Convert wei (token's smallest unit) to human-readable amount
  */
-export function fromWei(weiAmount: string | number, tokenAddress: string, decimals?: number): number {
-  const tokenDecimals = decimals !== undefined ? decimals : getTokenDecimals(tokenAddress);
-  const weiNum = typeof weiAmount === 'string' ? parseFloat(weiAmount) : weiAmount;
-  return weiNum / Math.pow(10, tokenDecimals);
+export function fromWei(weiAmount: string | number, decimals: number): string {
+  try {
+    // Ensure amount is a BigInt for formatUnits
+    const amountBigInt = typeof weiAmount === 'string' ? BigInt(weiAmount) : BigInt(weiAmount);
+    return formatUnits(amountBigInt, decimals);
+  } catch (error) {
+    console.error('Error in fromWei conversion:', error);
+    return '0';
+  }
 }
 
 

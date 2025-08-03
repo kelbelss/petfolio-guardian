@@ -7,7 +7,7 @@ import { BASE_NETWORK } from '@/config/base';
 export const config = createConfig({
   chains: [BASE_NETWORK],
   transports: {
-    [BASE_NETWORK.id]: http(BASE_NETWORK.rpcUrls.default.http[0]),
+    [BASE_NETWORK.id]: http('https://mainnet.base.org'),
   },
   /* ────────────────────────────────────────────────────────────────
      metaMask() already extends `injected()`. We only need metaMask.

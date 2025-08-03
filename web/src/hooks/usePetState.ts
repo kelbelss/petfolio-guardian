@@ -15,10 +15,10 @@ export interface OrderMeta {
 }
 
 export interface HealthEvent {
-  timestamp: number;
-  healthChange: number;
+  timestamp: string;
+  health_change: number;
   reason: string;
-  details?: string;
+  details?: unknown;
 }
 
 export interface PetState {

@@ -376,10 +376,10 @@ export class SupabaseService {
       }, (payload) => {
         callback(payload.new as Feed);
       })
-      .on('error', (error) => {
+      .on('error', (error: any) => {
         console.error('Supabase subscription error:', error);
         errorCallback?.(error);
-      })
+      }, () => {})
       .subscribe();
   }
 
@@ -394,10 +394,10 @@ export class SupabaseService {
       }, (payload) => {
         callback(payload.new as BotExecution);
       })
-      .on('error', (error) => {
+      .on('error', (error: any) => {
         console.error('Supabase subscription error:', error);
         errorCallback?.(error);
-      })
+      }, () => {})
       .subscribe();
   }
 
@@ -515,6 +515,18 @@ export class SupabaseService {
     // Calculate health based on feeds
     let totalHealth = 8.0;
     let lastFedTime = new Date(healthRecord.last_fed_time).getTime();
+    
+    // Preserve existing health history and only add new events
+    const existingHealthHistory = healthRecord.health_history || [];
+    const existingDecayEvents = existingHealthHistory.filter(event => 
+      event.reason === 'Natural decay'
+    );
+    
+    // Get existing feed events to avoid duplicates
+    const existingFeedEvents = existingHealthHistory.filter(event => 
+      event.reason !== 'Natural decay'
+    );
+    
     const healthHistory: any[] = [];
 
     if (feeds) {
@@ -523,15 +535,33 @@ export class SupabaseService {
         
         // Feed creation - differentiate between different feed types
         if (feed.feed_type === 'swap') {
-          // Instant swap - give +1.0 health
-          totalHealth += 1.0;
-          lastFedTime = Math.max(lastFedTime, createdAt);
-          healthHistory.push({
-            timestamp: createdAt,
-            healthChange: 1.0,
-            reason: 'Instant swap',
-            details: `${feed.src_token_symbol} → ${feed.dst_token_symbol}`
-          });
+          // Check if health has already been calculated for this swap
+          const healthCalculated = feed.metadata?.healthCalculated === true;
+          const swapId = feed.metadata?.swapId;
+          
+          // Check if this feed event already exists in health history
+          const feedEventExists = existingFeedEvents.some(event => 
+            event.timestamp === new Date(createdAt).toISOString() &&
+            event.reason === 'Instant swap' &&
+            event.details === `${feed.src_token_symbol} → ${feed.dst_token_symbol}`
+          );
+          
+          if (!healthCalculated && !feedEventExists) {
+            // Instant swap - give +1.0 health
+            totalHealth += 1.0;
+            lastFedTime = Math.max(lastFedTime, createdAt);
+            healthHistory.push({
+              timestamp: new Date(createdAt).toISOString(),
+              health_change: 1.0,
+              reason: 'Instant swap',
+              details: `${feed.src_token_symbol} → ${feed.dst_token_symbol}`
+            });
+            
+            // Mark this swap as health calculated to prevent duplicates
+            console.log(`Health calculated for swap: ${swapId}`);
+          } else {
+            console.log(`Health already calculated for swap: ${swapId} or event exists`);
+          }
         } else if (feed.feed_type === 'recurring') {
           // Check for special DCA types based on metadata
           const isPeerDCA = feed.metadata?.feedType === 'peer-dca';
@@ -539,43 +569,33 @@ export class SupabaseService {
           const isCustomYield = feed.metadata?.feedType === 'custom-yield';
           
           if (isPeerDCA) {
-            // Peer DCA - give +0.5 base + 3.0 for referral (placeholder for now)
-            totalHealth += 3.5;
+            // DCA to friend - give +2.0 for social interaction
+            totalHealth += 2.0;
             lastFedTime = Math.max(lastFedTime, createdAt);
             healthHistory.push({
-              timestamp: createdAt,
-              healthChange: 3.5,
-              reason: 'Created Peer DCA feed',
-              details: `${feed.src_token_symbol} → ${feed.dst_token_symbol} (Social bonus + referral)`
+              timestamp: new Date(createdAt).toISOString(),
+              health_change: 2.0,
+              reason: 'Created DCA to friend',
+              details: `${feed.src_token_symbol} → ${feed.dst_token_symbol} (Social bonus)`
             });
           } else if (isDCAYield) {
-            // DCA Yield - give +1.0 for creation
-            totalHealth += 1.0;
+            // DCA Yield - give +3.0 for yield strategy
+            totalHealth += 3.0;
             lastFedTime = Math.max(lastFedTime, createdAt);
             healthHistory.push({
-              timestamp: createdAt,
-              healthChange: 1.0,
+              timestamp: new Date(createdAt).toISOString(),
+              health_change: 3.0,
               reason: 'Created DCA Yield feed',
               details: `${feed.src_token_symbol} → ${feed.dst_token_symbol}`
             });
-          } else if (isCustomYield) {
-            // Custom Yield Strategy - give +0.5 for now (placeholder)
-            totalHealth += 0.5;
-            lastFedTime = Math.max(lastFedTime, createdAt);
-            healthHistory.push({
-              timestamp: createdAt,
-              healthChange: 0.5,
-              reason: 'Created Custom Yield Strategy',
-              details: `${feed.src_token_symbol} → ${feed.dst_token_symbol}`
-            });
           } else {
-            // Regular DCA feed creation - give +0.5 health
-            totalHealth += 0.5;
+            // DCA to self - give +1.5 health
+            totalHealth += 1.5;
             lastFedTime = Math.max(lastFedTime, createdAt);
             healthHistory.push({
-              timestamp: createdAt,
-              healthChange: 0.5,
-              reason: 'Created DCA feed',
+              timestamp: new Date(createdAt).toISOString(),
+              health_change: 1.5,
+              reason: 'Created DCA to self',
               details: `${feed.src_token_symbol} → ${feed.dst_token_symbol}`
             });
           }
@@ -589,7 +609,6 @@ export class SupabaseService {
             // Check for special DCA types
             const isPeerDCA = feed.metadata?.feedType === 'peer-dca';
             const isDCAYield = feed.metadata?.feedType === 'dca-yield';
-            const isCustomYield = feed.metadata?.feedType === 'custom-yield';
             
             let executionHealth = 0.5; // Default for regular DCA
             let executionReason = 'DCA feed executed';
@@ -600,16 +619,13 @@ export class SupabaseService {
             } else if (isDCAYield) {
               executionHealth = 2.0; // +2.0 per execution for DCA Yield
               executionReason = 'DCA Yield feed executed';
-            } else if (isCustomYield) {
-              executionHealth = 0.5; // Same as regular DCA for now
-              executionReason = 'Custom Yield Strategy executed';
             }
             
             totalHealth += executionHealth;
             lastFedTime = Math.max(lastFedTime, executionTime);
             healthHistory.push({
-              timestamp: executionTime,
-              healthChange: executionHealth,
+              timestamp: new Date(executionTime).toISOString(),
+              health_change: executionHealth,
               reason: executionReason,
               details: `${feed.src_token_symbol} → ${feed.dst_token_symbol}`
             });
@@ -625,8 +641,8 @@ export class SupabaseService {
               totalHealth += 1.0;
               lastFedTime = Math.max(lastFedTime, createdAt);
               healthHistory.push({
-                timestamp: createdAt,
-                healthChange: 1.0,
+                timestamp: new Date(createdAt).toISOString(),
+                health_change: 1.0,
                 reason: 'DCA feed completed successfully',
                 details: `${feed.feed_type} feed finished`
               });
@@ -635,8 +651,8 @@ export class SupabaseService {
             totalHealth -= 1.0;
             lastFedTime = Math.max(lastFedTime, createdAt);
             healthHistory.push({
-              timestamp: createdAt,
-              healthChange: -1.0,
+              timestamp: new Date(createdAt).toISOString(),
+              health_change: -1.0,
               reason: 'DCA feed failed',
               details: `${feed.feed_type} feed encountered an error`
             });
@@ -645,33 +661,66 @@ export class SupabaseService {
       });
     }
 
-    // Apply decay
+    // Mark swaps as health calculated to prevent duplicates
+    const swapsToUpdate: Array<{ id: string; updates: Partial<Feed> }> = [];
+    if (feeds) {
+      feeds.forEach(feed => {
+        if (feed.feed_type === 'swap' && 
+            feed.metadata?.healthCalculated === false && 
+            feed.metadata?.swapId) {
+          swapsToUpdate.push({
+            id: feed.id,
+            updates: {
+              metadata: {
+                ...feed.metadata,
+                healthCalculated: true
+              }
+            }
+          });
+        }
+      });
+    }
+
+    // Apply decay - preserve existing decay events and only add new ones
     const currentTime = Date.now();
     const timeSinceLastFed = currentTime - lastFedTime;
     const decayInterval = 6 * 60 * 60 * 1000; // 6 hours
     const decayCycles = Math.floor(timeSinceLastFed / decayInterval);
     
+    // Get the latest decay event timestamp to avoid duplicates
+    const latestDecayTime = existingDecayEvents.length > 0 
+      ? Math.max(...existingDecayEvents.map(e => new Date(e.timestamp).getTime()))
+      : lastFedTime;
+    
     if (decayCycles > 0) {
       const totalDecay = decayCycles * 0.5; // 0.5 points per cycle
       totalHealth = Math.max(0, totalHealth - totalDecay);
       
-      // Add decay events
+      // Add only new decay events (after the latest existing decay)
       for (let i = 0; i < decayCycles; i++) {
         const decayTime = lastFedTime + (i + 1) * decayInterval;
-        healthHistory.push({
-          timestamp: decayTime,
-          healthChange: -0.5,
-          reason: 'Natural decay',
-          details: 'No food for 6 hours'
-        });
+        
+        // Only add if this decay event is newer than the latest existing decay
+        if (decayTime > latestDecayTime) {
+          healthHistory.push({
+            timestamp: new Date(decayTime).toISOString(),
+            health_change: -0.5,
+            reason: 'Natural decay',
+            details: 'No food for 6 hours'
+          });
+        }
       }
     }
+    
+    // Add back existing feed events and decay events
+    healthHistory.push(...existingFeedEvents);
+    healthHistory.push(...existingDecayEvents);
 
     // Cap health between 0 and 10
     totalHealth = Math.max(0, Math.min(10, totalHealth));
 
     // Sort history by timestamp (newest first)
-    healthHistory.sort((a, b) => b.timestamp - a.timestamp);
+    healthHistory.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
     // Update health record
     const updates = {
@@ -682,8 +731,9 @@ export class SupabaseService {
       updated_at: now
     };
 
+    let result;
     if (!currentHealth) {
-      return this.createHealthRecord({
+      result = await this.createHealthRecord({
         wallet_address: walletAddress,
         current_health: totalHealth,
         last_fed_time: new Date(lastFedTime).toISOString(),
@@ -691,8 +741,21 @@ export class SupabaseService {
         health_history: healthHistory
       });
     } else {
-      return this.updateHealthRecord(walletAddress, updates);
+      result = await this.updateHealthRecord(walletAddress, updates);
     }
+
+    // Update feeds to mark swaps as health calculated
+    if (swapsToUpdate.length > 0) {
+      try {
+        await this.batchUpdateFeeds(swapsToUpdate);
+        console.log(`Updated ${swapsToUpdate.length} swaps as health calculated`);
+      } catch (updateError) {
+        console.error('Failed to update swap health flags:', updateError);
+        // Don't fail the health calculation if feed updates fail
+      }
+    }
+
+    return result;
   }
 }
 

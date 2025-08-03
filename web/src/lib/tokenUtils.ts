@@ -44,7 +44,11 @@ export const toUsd = (rawPriceWei: string): number => {
 
 export const toCanonical = (token: string): string => {
   if (token === '' || token.toLowerCase() === 'eth') {
-    return '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE'; // Use mixed case like working test page
+    return '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE'; // Use mixed case for 1inch API
+  }
+  // Convert lowercase ETH address to mixed case for swap API
+  if (token.toLowerCase() === '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee') {
+    return '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
   }
   return token.toLowerCase();
 };
@@ -83,7 +87,7 @@ export const sanitize = (v: string): string => {
   return v.replace(/[^0-9.]/g, '').slice(0, 24);
 };
 
-export const NATIVE_TOKEN = '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
+export const NATIVE_TOKEN = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
 
 // 1inch price API uses 18 decimals for USD prices
 // TODO: Verify this is correct - if stablecoins show as $0.29 instead of $1.00, 

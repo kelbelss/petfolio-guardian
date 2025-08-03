@@ -68,7 +68,7 @@ export function encodeInteractions(params: InteractionsParams): `0x${string}` {
     ]
   );
 
-  // Prefix with hook address
+  // Prefix with hook address - TWAP_DCA is the correct hook receiver
   const hookAddress = CONTRACT_ADDRESSES.TWAP_DCA;
   return `${hookAddress}${encodedParams.slice(2)}` as `0x${string}`;
 }

@@ -1,10 +1,10 @@
 import React, { useReducer, useMemo, useEffect, useState } from 'react';
-import { useAccount, useWalletClient } from 'wagmi';
+import { useAccount, useWalletClient, usePublicClient } from 'wagmi';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
-import { useTokens, useBalances, useTokenPrice, useQuote, type TokenMeta, type QuoteResponse, normalizeBalances, getSwapTx } from '@/lib/oneInchService';
+import { useTokens, useBalances, useTokenPrice, useQuote, type TokenMeta, type QuoteResponse, normalizeBalances, getSwapTx, getAllowance, getApproveTransaction } from '@/lib/oneInchService';
 import { toWei, fromWei, toCanonical, NATIVE_TOKEN, decodeUsd } from '@/lib/tokenUtils';
 import { COMMON_TOKENS } from '@/lib/constants';
 import TokenInput from '@/components/TokenInput/TokenInput';
@@ -84,6 +84,7 @@ function ConnectWalletBanner() {
 export default function RegularSwap() {
     const { address: account } = useAccount();
     const { data: walletClient } = useWalletClient();
+    const publicClient = usePublicClient();
     const navigate = useNavigate();
     const { toast } = useToast();
     const { mutateAsync: createFeed } = useCreateFeed();
@@ -128,7 +129,7 @@ export default function RegularSwap() {
     }, [tokensData, tokensError, tokensLoading]);
 
     // Get balances for selected tokens and common tokens
-    const commonTokens = [NATIVE_TOKEN, COMMON_TOKENS.WETH, COMMON_TOKENS.USDC];
+    const commonTokens = [NATIVE_TOKEN, COMMON_TOKENS[0].address, COMMON_TOKENS[1].address];
     const selectedTokens = [state.fromToken?.address, state.toToken?.address].filter(Boolean) as string[];
     const allRequestedTokens = [...new Set([...commonTokens, ...selectedTokens].map(addr => addr.toLowerCase()))]; // Normalize to lowercase and remove duplicates
 
@@ -201,6 +202,14 @@ export default function RegularSwap() {
 
     // Handle swap execution
     const handleSwap = async () => {
+        console.log('Starting swap with params:', {
+            fromToken: state.fromToken?.address,
+            toToken: state.toToken?.address,
+            fromAmount: state.fromAmount,
+            account,
+            walletClient: !!walletClient
+        });
+
         if (!state.fromToken || !state.toToken || !state.fromAmount || !account || !walletClient) {
             console.error('Missing required swap parameters:', {
                 fromToken: state.fromToken?.address,
@@ -218,24 +227,124 @@ export default function RegularSwap() {
                 throw new Error('Invalid slippage settings');
             }
 
-            const fromAmountWei = toWei(state.fromAmount, state.fromToken.decimals);
-            const slippagePercent = state.slippage.toString();
-            const isNativeToken = state.fromToken.address.toLowerCase() === NATIVE_TOKEN.toLowerCase();
+            console.log('Converting amount to wei:', {
+                amount: state.fromAmount,
+                decimals: state.fromToken.decimals,
+                tokenAddress: state.fromToken.address
+            });
 
-            // Build swap parameters for 1inch API
+            const fromAmountWei = toWei(state.fromAmount, state.fromToken.decimals);
+            console.log('Amount in wei:', fromAmountWei);
+
+            // Check if amount is too small (less than 1 wei)
+            if (BigInt(fromAmountWei) < 1n) {
+                throw new Error('Amount is too small for swap');
+            }
+
+            // Check token allowance before swap
+            console.log('Checking token allowance...');
+            try {
+                const allowanceData = await getAllowance(state.fromToken.address, account);
+                const currentAllowance = BigInt(allowanceData.allowance || '0');
+                const requiredAmount = BigInt(fromAmountWei);
+
+                console.log('Allowance check:', {
+                    currentAllowance: currentAllowance.toString(),
+                    requiredAmount: requiredAmount.toString(),
+                    hasEnoughAllowance: currentAllowance >= requiredAmount
+                });
+
+                if (currentAllowance < requiredAmount) {
+                    console.log('Insufficient allowance, getting approval transaction...');
+
+                    // Get approval transaction
+                    const approveData = await getApproveTransaction(state.fromToken.address, fromAmountWei);
+
+                    // Send approval transaction first
+                    const approveTx = {
+                        ...approveData.tx,
+                        gas: approveData.tx.gas ? BigInt(approveData.tx.gas) : undefined,
+                    };
+
+                    console.log('Sending approval transaction:', approveTx);
+                    const approveHash = await walletClient.sendTransaction(approveTx);
+                    console.log('Approval transaction sent:', approveHash);
+
+                    // Wait for approval to be mined before proceeding
+                    if (!publicClient) {
+                        throw new Error('Public client not available');
+                    }
+                    await publicClient.waitForTransactionReceipt({ hash: approveHash });
+                    console.log('Approval transaction confirmed');
+                } else {
+                    console.log('Sufficient allowance already exists');
+                }
+            } catch (allowanceError) {
+                console.error('Allowance check failed:', allowanceError);
+                // Continue with swap - 1inch might handle it
+                console.log('Continuing with swap despite allowance check failure');
+            }
+
+            const slippagePercent = state.slippage.toString();
+
+            // Build swap parameters for 1inch API (matching official docs)
             const swapParams = {
                 src: toCanonical(state.fromToken.address),
                 dst: toCanonical(state.toToken.address),
                 amount: fromAmountWei,
                 from: account,
-                slippage: slippagePercent,
-                receiver: account,
-                // Use disableEstimate for native ETH swaps to avoid 400 errors
-                disableEstimate: isNativeToken ? 'true' : 'false'
+                slippage: slippagePercent
             };
 
+            console.log('Token addresses:', {
+                fromTokenOriginal: state.fromToken.address,
+                fromTokenCanonical: toCanonical(state.fromToken.address),
+                toTokenOriginal: state.toToken.address,
+                toTokenCanonical: toCanonical(state.toToken.address)
+            });
+
+            // Debug swap parameters
+            console.group('🔍 Swap Parameters Debug');
+            console.log('From Token:', swapParams.src);
+            console.log('To Token:', swapParams.dst);
+            console.log('Amount (wei):', swapParams.amount);
+            console.log('From Address:', swapParams.from);
+            console.log('Slippage:', swapParams.slippage);
+            console.log('Amount (human):', state.fromAmount);
+            console.log('From Balance:', fromBalance);
+            console.log('From Price USD:', fromPriceUsd);
+            console.groupEnd();
+
+            console.group('🔍 Token Information Debug');
+            console.log('From Token:', state.fromToken);
+            console.log('To Token:', state.toToken);
+            console.log('Available Tokens Count:', availableTokens.length);
+            console.log('Balances Data:', balancesData);
+            console.log('Quote Data:', quote);
+            console.groupEnd();
+
             // Get swap transaction from 1inch API
-            const swapData = await getSwapTx(swapParams);
+            let swapData;
+            try {
+                swapData = await getSwapTx(swapParams);
+            } catch (apiError) {
+                console.error('1inch API Error:', apiError);
+
+                // Handle specific API errors
+                const errorMessage = apiError instanceof Error ? apiError.message : String(apiError);
+
+                if (errorMessage.includes('Cannot Estimate')) {
+                    throw new Error('Transaction cannot be estimated. Please check allowances and balances.');
+                }
+                if (errorMessage.includes('Insufficient Liquidity')) {
+                    throw new Error('Insufficient liquidity for this trade. Try a smaller amount or higher slippage.');
+                }
+                if (errorMessage.includes('Insufficient allowance')) {
+                    throw new Error('Token approval required. Please approve the token first.');
+                }
+
+                throw apiError;
+            }
 
             if (!swapData) {
                 throw new Error('Failed to get swap transaction data');
@@ -275,7 +384,7 @@ export default function RegularSwap() {
                         src_token_symbol: state.fromToken.symbol,
                         dst_token_symbol: state.toToken.symbol,
                         from_amount: state.fromAmount,
-                        to_amount: formatUnits(BigInt(swapData.tx.dstAmount || '0'), state.toToken.decimals),
+                        to_amount: formatUnits(BigInt(swapData.dstAmount || '0'), state.toToken.decimals),
                         chunk_size: parseFloat(state.fromAmount),
                         period: 0,
                         status: 'completed',
@@ -283,7 +392,10 @@ export default function RegularSwap() {
                         metadata: {
                             quote: quote,
                             swapData: swapData,
-                            timestamp: Date.now()
+                            timestamp: Date.now(),
+                            // Add a unique identifier to prevent duplicate health calculations
+                            healthCalculated: false,
+                            swapId: `${hash}-${Date.now()}`
                         },
                         bot_execution_count: 0,
                         bot_execution_errors: []
@@ -305,9 +417,26 @@ export default function RegularSwap() {
 
         } catch (error) {
             console.error('Swap error:', error);
+
+            // Enhanced error messages
+            let userMessage = 'Swap failed';
+            const errorMessage = error instanceof Error ? error.message : String(error);
+
+            if (errorMessage.includes('allowance')) {
+                userMessage = 'Token approval required. Please approve the token first.';
+            } else if (errorMessage.includes('liquidity')) {
+                userMessage = 'Insufficient liquidity. Try a smaller amount.';
+            } else if (errorMessage.includes('balance')) {
+                userMessage = 'Insufficient balance. Please check your token balance.';
+            } else if (errorMessage.includes('gas')) {
+                userMessage = 'Insufficient ETH for gas fees. Please add more ETH to your wallet.';
+            } else if (errorMessage.includes('Cannot Estimate')) {
+                userMessage = 'Transaction cannot be estimated. Please check allowances and balances.';
+            }
+
             toast({
                 title: "Swap failed",
-                description: error instanceof Error ? error.message : "Unknown error occurred",
+                description: userMessage,
                 variant: "destructive",
             });
         }
@@ -330,7 +459,7 @@ export default function RegularSwap() {
             parseFloat(state.fromAmount) === 0 ||
             state.fromToken.address === state.toToken.address ||
             parseFloat(fromBalance) < parseFloat(state.fromAmount) ||
-            quoteError ||
+            !!quoteError ||
             quoteLoading;
     };
 

@@ -4,14 +4,10 @@ import { Button } from '@/components/ui/button';
 import { useAccount } from 'wagmi';
 import { useUserFeeds, useHealthRecord, useCalculateAndUpdateHealth } from '@/hooks/useSupabase';
 import { formatDate } from '@/lib/format';
+import type { HealthEvent } from '@/lib/supabase';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
-export interface HealthEvent {
-    timestamp: number;
-    healthChange: number;
-    reason: string;
-    details?: string;
-    transactionHash?: string;
-}
+// Use the HealthEvent interface from supabase.ts instead of defining our own
 
 export default function HealthTracking() {
     const { address } = useAccount();
@@ -45,10 +41,11 @@ export default function HealthTracking() {
 
     // Get recent health events (last 30 days, show first 5)
     const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
-    const recentEvents = healthData.healthHistory.filter(event => event.timestamp > thirtyDaysAgo);
+    const recentEvents = healthData.healthHistory.filter(event => new Date(event.timestamp).getTime() > thirtyDaysAgo);
     const displayEvents = recentEvents.slice(0, 5);
 
-    const formatHealthChange = (change: number): string => {
+    const formatHealthChange = (change: number | undefined): string => {
+        if (change === undefined || change === null) return '+0';
         const sign = change >= 0 ? '+' : '';
         return `${sign}${change % 1 === 0 ? change.toFixed(0) : change.toFixed(1)}`;
     };
@@ -80,12 +77,85 @@ export default function HealthTracking() {
                 </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-                {/* Health Chart Placeholder */}
-                <div className="w-full h-32 bg-gradient-to-r from-green-100 to-emerald-100 rounded-lg flex items-center justify-center border border-green-200">
-                    <div className="text-center">
-                        <div className="text-green-700 font-semibold mb-1">Health Chart</div>
-                        <div className="text-xs text-green-600"></div>
-                        <div className="text-xs text-orange-600 mt-1">
+                {/* Health Chart */}
+                <div className="w-full h-64 bg-white rounded-lg border border-green-200 p-4">
+                    {healthData.healthHistory.length > 0 ? (
+                        <ResponsiveContainer width="100%" height={180}>
+                            <LineChart data={(() => {
+                                // Create 2-hour intervals for the last 24 hours (12 intervals)
+                                const intervals = [];
+                                const now = new Date();
+                                const twoHours = 2 * 60 * 60 * 1000; // 2 hours in ms
+
+                                for (let i = 11; i >= 0; i--) {
+                                    const intervalTime = new Date(now.getTime() - (i * twoHours));
+                                    const intervalStart = new Date(intervalTime.getTime() - twoHours);
+                                    const intervalEnd = intervalTime;
+
+                                    // Find health events in this interval
+                                    const eventsInInterval = healthData.healthHistory.filter(event => {
+                                        const eventTime = new Date(event.timestamp);
+                                        return eventTime >= intervalStart && eventTime <= intervalEnd;
+                                    });
+
+                                    // Calculate cumulative health up to this interval
+                                    const cumulativeHealth = healthData.healthHistory
+                                        .filter(event => new Date(event.timestamp) <= intervalEnd)
+                                        .reduce((sum, h) => sum + (h.health_change || 0), 8);
+
+                                    intervals.push({
+                                        time: intervalTime.toLocaleTimeString([], { hour: '2-digit' }),
+                                        health: Math.max(0, Math.min(10, cumulativeHealth)),
+                                        events: eventsInInterval.length,
+                                        hasEvent: eventsInInterval.length > 0
+                                    });
+                                }
+
+                                return intervals;
+                            })()}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                                <XAxis
+                                    dataKey="time"
+                                    tick={{ fontSize: 10 }}
+                                    interval="preserveStartEnd"
+                                />
+                                <YAxis
+                                    domain={[0, 10]}
+                                    tick={{ fontSize: 10 }}
+                                    tickCount={6}
+                                />
+                                <Tooltip
+                                    contentStyle={{
+                                        backgroundColor: '#f9fafb',
+                                        border: '1px solid #d1d5db',
+                                        borderRadius: '8px'
+                                    }}
+                                    formatter={(value: any, name: any) => {
+                                        return [`${value.toFixed(1)}/10`, 'Health'];
+                                    }}
+                                    labelFormatter={(label) => `Time: ${label}`}
+                                />
+                                <Line
+                                    type="linear"
+                                    dataKey="health"
+                                    stroke="#10b981"
+                                    strokeWidth={3}
+                                    dot={{ fill: '#10b981', strokeWidth: 2, r: 4 }}
+                                    activeDot={{ r: 6, stroke: '#10b981', strokeWidth: 2 }}
+                                    connectNulls={false}
+                                />
+                            </LineChart>
+                        </ResponsiveContainer>
+                    ) : (
+                        <div className="flex items-center justify-center h-32 text-gray-500">
+                            <div className="text-center">
+                                <div className="text-sm mb-1">No health data yet</div>
+                                <div className="text-xs">Create your first DCA feed to see your health chart!</div>
+                            </div>
+                        </div>
+                    )}
+                    <div className="text-center mt-2">
+                        <div className="text-xs text-orange-600">
                             ⚠️ Health decays by 0.5 points every 6 hours without activity
                         </div>
                     </div>
@@ -100,15 +170,15 @@ export default function HealthTracking() {
                                 <div key={index} className="flex justify-between items-center text-sm p-2 rounded-lg hover:bg-gray-50">
                                     <div className="flex-1">
                                         <div className="font-medium text-gray-900">{event.reason}</div>
-                                        {event.details && (
+                                        {event.details && typeof event.details === 'string' && (
                                             <div className="text-xs text-gray-600">{event.details}</div>
                                         )}
                                         <div className="text-xs text-gray-500">
-                                            {formatDate(event.timestamp)}
+                                            {formatDate(new Date(event.timestamp))}
                                         </div>
                                     </div>
-                                    <div className={`font-mono font-semibold ${event.healthChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                        {formatHealthChange(event.healthChange)}
+                                    <div className={`font-mono font-semibold ${(event.health_change || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                        {formatHealthChange(event.health_change)}
                                     </div>
                                 </div>
                             ))
@@ -158,20 +228,15 @@ export default function HealthTracking() {
                                     <div className="flex justify-between items-start">
                                         <div className="flex-1">
                                             <div className="font-medium text-gray-900">{event.reason}</div>
-                                            {event.details && (
+                                            {event.details && typeof event.details === 'string' && (
                                                 <div className="text-sm text-gray-600 mt-1">{event.details}</div>
                                             )}
-                                            {event.transactionHash && (
-                                                <div className="text-xs text-blue-600 mt-1 cursor-pointer hover:underline">
-                                                    View Transaction
-                                                </div>
-                                            )}
                                             <div className="text-xs text-gray-500 mt-1">
-                                                {formatDate(event.timestamp)}
+                                                {formatDate(new Date(event.timestamp))}
                                             </div>
                                         </div>
-                                        <div className={`font-mono font-semibold text-lg ${event.healthChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                            {formatHealthChange(event.healthChange)}
+                                        <div className={`font-mono font-semibold text-lg ${(event.health_change || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                            {formatHealthChange(event.health_change)}
                                         </div>
                                     </div>
                                 </div>

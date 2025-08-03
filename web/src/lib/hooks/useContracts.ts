@@ -7,7 +7,7 @@ export function isEthToken(tokenAddress: string): boolean {
 
 // Helper to get WETH address
 export function getWethAddress(): string {
-  return COMMON_TOKENS.WETH;
+  return COMMON_TOKENS[0].address;
 }
 
 // Contract configurations for DCA integration
@@ -17,7 +17,7 @@ export const CONTRACT_CONFIGS = {
     abiPath: '../abis/twapAbi.json',
   },
   WETH: {
-    address: COMMON_TOKENS.WETH as `0x${string}`,
+    address: COMMON_TOKENS[0].address as `0x${string}`,
     abiPath: '../abis/WETH.json',
   },
   PERMIT2: {

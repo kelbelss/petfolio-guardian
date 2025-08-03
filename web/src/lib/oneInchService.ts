@@ -13,7 +13,7 @@
 //
 // Benefits:
 // - Single import instead of multiple files
-// - No chain ID parameter (hardcoded to Base)
+// - No chain ID parameter (hardcoded to Polygon)
 // - Cleaner error handling
 // - Consistent API patterns
 
@@ -51,24 +51,78 @@ export async function getQuote(src: string, dst: string, amount: string, include
     includeProtocols: includeProtocols.toString()
   });
   const url = ix(`/swap/v6.0/${CHAIN}/quote?${params}`);
+  
+  // Debug the API call
+  console.log('1inch API Call:', {
+    src,
+    dst,
+    amount,
+    url: url.toString()
+  });
+  
   const response = await fetch(url, { headers: HEADERS });
   
   if (!response.ok) {
     throw new Error(`Quote failed: ${response.status} ${response.statusText}`);
   }
   
-  return response.json();
+  const result = await response.json();
+  console.log('1inch API Response:', result);
+  
+  return result;
 }
 
 /** GET /swap – returns tx object ready for wallet */
+/** GET /approve/allowance - check token allowance */
+export async function getAllowance(tokenAddress: string, walletAddress: string) {
+  const url = ix(`/approve/v6.1/${CHAIN}/allowance?tokenAddress=${tokenAddress}&walletAddress=${walletAddress}`);
+  const res = await fetch(url, { headers: HEADERS });
+  
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(`Allowance check failed: ${res.status} – ${txt}`);
+  }
+  return res.json();
+}
+
+/** GET /approve/transaction - get approval transaction */
+export async function getApproveTransaction(tokenAddress: string, amount: string) {
+  const url = ix(`/approve/v6.1/${CHAIN}/transaction?tokenAddress=${tokenAddress}&amount=${amount}`);
+  const res = await fetch(url, { headers: HEADERS });
+  
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(`Approval transaction failed: ${res.status} – ${txt}`);
+  }
+  return res.json();
+}
+
 export async function getSwapTx(params: Record<string, string>) {
-  const qs = new URLSearchParams(params).toString();
-  const url = ix(`/swap/v6.0/${CHAIN}/swap?${qs}`);
+  // Use the exact parameter names from the official docs
+  const swapParams = {
+    src: params.src,
+    dst: params.dst,
+    amount: params.amount,
+    from: params.from,
+    origin: params.from, // Required parameter - same as from address
+    slippage: params.slippage,
+    disableEstimate: params.disableEstimate || "false",
+    allowPartialFill: params.allowPartialFill || "false"
+  };
+  
+  const qs = new URLSearchParams(swapParams).toString();
+  const url = ix(`/swap/v6.1/${CHAIN}/swap?${qs}`);
+  console.log('1inch swap URL:', url);
   const res = await fetch(url, { headers: HEADERS });
 
   if (!res.ok) {
     // surface the JSON body so we know **why** it failed
     const txt = await res.text();
+    console.error('1inch API error response:', {
+      status: res.status,
+      statusText: res.statusText,
+      body: txt
+    });
     let msg   = txt;
     try   { msg = JSON.parse(txt).description || txt; }  // 1inch returns {error,description}
     catch { /* fallback to raw text */ }
@@ -99,7 +153,8 @@ export async function getBalances(address: string, tokenAddrs: string[]) {
     throw new Error(`Balances failed: ${response.status} ${response.statusText}`);
   }
   
-  return response.json();
+  const data = await response.json();
+  return normalizeBalances(data);
 }
 
 /** GET /price - get token price */
@@ -183,7 +238,7 @@ export function normalizeBalances(data: { balances?: Record<string, string> } | 
   
   // Handle { balances: Record<string, string> } format
   if (data && typeof data === 'object' && 'balances' in data && data.balances) {
-    return data.balances;
+    return data.balances as Record<string, string>;
   }
   
   // Handle Array<{ tokenAddress: string; balance: string }> format
