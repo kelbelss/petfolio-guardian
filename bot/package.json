@@ -1,7 +1,7 @@
 {
   "scripts": {
     "build:blob": "npm run compile && node dist/buildInteraction.js",
-    "simulate": "ts-node bot/simulateBot.ts"
+    "simulate": "ts-node bot/simulateBot.ts",
     "bot": "ts-node bot.ts"
   },
   "dependencies": {

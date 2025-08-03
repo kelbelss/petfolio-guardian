@@ -1,0 +1,35 @@
+[
+  {
+    "type": "function",
+    "name": "nextFillTime",
+    "inputs": [{ "name": "", "type": "bytes32" }],
+    "outputs": [{ "name": "", "type": "uint64" }],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "LIMIT_ORDER_PROTOCOL",
+    "inputs": [],
+    "outputs": [{ "name": "", "type": "address" }],
+    "stateMutability": "view"
+  },
+  {
+    "type": "event",
+    "name": "TwapDcaExecuted",
+    "inputs": [
+      { "name": "orderHash", "type": "bytes32", "indexed": true },
+      { "name": "chunkIn", "type": "uint256", "indexed": false },
+      { "name": "minOut", "type": "uint256", "indexed": false },
+      { "name": "nextFillTime", "type": "uint64", "indexed": false }
+    ]
+  },
+  {
+    "type": "event",
+    "name": "DstRouted",
+    "inputs": [
+      { "name": "orderHash", "type": "bytes32", "indexed": true },
+      { "name": "to", "type": "address", "indexed": true },
+      { "name": "toAave", "type": "bool", "indexed": false }
+    ]
+  }
+]
