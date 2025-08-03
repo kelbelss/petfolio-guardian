@@ -2,3 +2,4 @@
 /bot/node_modules/.bin
 /bot/node_modules
 bot/.env
+/web/docs
