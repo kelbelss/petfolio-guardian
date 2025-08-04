@@ -12,7 +12,7 @@ import { supabase } from "./supabase";
 // === ENV ===
 const RPC       = process.env.MAINNET_RPC_URL!;
 const PK        = process.env.MAKER_PK as `0x${string}`;
-const TWAP_HOOK = "0xd05d137ce36c4ddec5cddf5e1e2181179153a1a6";
+const TWAP_HOOK = "";
 const LOP       = "0x111111125421Ca6dC452d289314280a0f8842A65";
 
 // === Clients ===
