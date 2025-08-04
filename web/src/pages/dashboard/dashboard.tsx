@@ -86,7 +86,7 @@ export default function Dashboard() {
 
 
     return (
-        <div className="w-full bg-[#effdf4] min-h-screen">
+        <div className="w-full bg-[#f0fbf3] min-h-screen">
             <div className="max-w-7xl mx-auto py-6 px-4 sm:py-12 sm:px-6">
                 {/* Main Content - Hippo Left, Content Right */}
                 <div className="flex flex-col lg:flex-row gap-6 lg:gap-8">
