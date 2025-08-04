@@ -31,7 +31,7 @@ export default function App() {
     <Web3Providers>
       <header className="flex justify-between items-center p-4 w-full bg-white border-b border-gray-200">
         <Link to="/" className="flex items-center gap-3 text-2xl font-bold text-emerald-600">
-          <img src="/src/assets/faviconpet.png" alt="Petfolio Guardian" className="w-8 h-8" />
+          <img src="/public/faviconpet.png" alt="Petfolio Guardian" className="w-8 h-8" />
           Petfolio Guardian
         </Link>
         <nav className="flex gap-6">
