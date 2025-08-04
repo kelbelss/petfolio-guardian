@@ -9,8 +9,8 @@ export default function YieldFeedWizard() {
         <div className="w-full bg-[#effdf4] min-h-screen">
             <div className="max-w-6xl mx-auto p-8">
                 <div className="mb-8 text-center">
-                    <h1 className="text-4xl font-bold text-emerald-700 mb-2">Feed Hub</h1>
-                    <p className="text-gray-600 text-lg">Put something fun here</p>
+                    <h1 className="text-4xl font-bold text-emerald-700 mb-2">Feed your Hippo</h1>
+                    <p className="text-gray-600 text-lg">Choose your automated investment strategy</p>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
@@ -36,7 +36,12 @@ export default function YieldFeedWizard() {
                     <div className="bg-white rounded-xl shadow-lg border border-emerald-200 p-6 hover:shadow-xl transition-shadow">
                         <div className="text-center mb-4">
                             <div className="text-4xl mb-2">🪙</div>
-                            <h3 className="text-xl font-bold text-emerald-700">Token DCA</h3>
+                            <div className="flex items-center justify-center gap-2 mb-2">
+                                <h3 className="text-xl font-bold text-emerald-700">Token DCA</h3>
+                                <span className="inline-block bg-orange-100 text-orange-800 text-xs px-2 py-1 rounded-full font-medium">
+                                    Coming Soon
+                                </span>
+                            </div>
                         </div>
                         <p className="text-center text-gray-600 text-sm mb-4">
                             Set up automated DCA for specific tokens to build your portfolio
@@ -53,7 +58,12 @@ export default function YieldFeedWizard() {
                     <div className="bg-white rounded-xl shadow-lg border border-emerald-200 p-6 hover:shadow-xl transition-shadow">
                         <div className="text-center mb-4">
                             <div className="text-4xl mb-2">👥</div>
-                            <h3 className="text-xl font-bold text-emerald-700">Peer DCA</h3>
+                            <div className="flex items-center justify-center gap-2 mb-2">
+                                <h3 className="text-xl font-bold text-emerald-700">Peer DCA</h3>
+                                <span className="inline-block bg-orange-100 text-orange-800 text-xs px-2 py-1 rounded-full font-medium">
+                                    Coming Soon
+                                </span>
+                            </div>
                         </div>
                         <p className="text-center text-gray-600 text-sm mb-4">
                             Help your peers build wealth with automated DCA strategies
@@ -70,7 +80,12 @@ export default function YieldFeedWizard() {
                     <div className="bg-white rounded-xl shadow-lg border border-emerald-200 p-6 hover:shadow-xl transition-shadow">
                         <div className="text-center mb-4">
                             <div className="text-4xl mb-2">🏦</div>
-                            <h3 className="text-xl font-bold text-emerald-700">Your Aave Yield Farming</h3>
+                            <div className="flex items-center justify-center gap-2 mb-2">
+                                <h3 className="text-xl font-bold text-emerald-700">Earn Yield</h3>
+                                <span className="inline-block bg-orange-100 text-orange-800 text-xs px-2 py-1 rounded-full font-medium">
+                                    Coming Soon
+                                </span>
+                            </div>
                         </div>
                         <p className="text-center text-gray-600 text-sm mb-4">
                             Optimise your yield farming on Aave with your custom strategies

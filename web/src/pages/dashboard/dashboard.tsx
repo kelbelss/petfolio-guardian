@@ -186,11 +186,31 @@ function FeedNowSection({ navigate }: { navigate: (path: string) => void }) {
     const { toast } = useToast();
     const scrollContainerRef = React.useRef<HTMLDivElement>(null);
 
+    interface SwapOption {
+        id: string;
+        title: string;
+        description: string;
+        icon: string;
+        explanation: string;
+        hippoSnack: string;
+        comingSoon?: boolean;
+    }
+
     // Handle Feed Now button based on selection
     const handleFeedNow = async () => {
         if (!address || !walletClient) {
             toast({ title: 'Wallet not connected', variant: 'destructive' });
             return;
+        }
+
+        const selectedOptionData = swapOptions.find(option => option.id === selectedOption);
+
+        if (selectedOptionData?.comingSoon) {
+            toast({
+                title: 'Coming Soon!',
+                description: `${selectedOptionData.title} setup is available but the feature is not yet live.`,
+                variant: 'default'
+            });
         }
 
         if (selectedOption === 'regular') {
@@ -218,7 +238,7 @@ function FeedNowSection({ navigate }: { navigate: (path: string) => void }) {
     };
 
     // STATIC DEMO SWAP OPTIONS
-    const swapOptions = [
+    const swapOptions: SwapOption[] = [
         {
             id: 'regular',
             title: 'Instant Swap',
@@ -233,7 +253,8 @@ function FeedNowSection({ navigate }: { navigate: (path: string) => void }) {
             description: 'Regular self-investment strategy',
             icon: '👤',
             explanation: 'Create recurring DCA feeds to automatically feed your hippo on schedule.',
-            hippoSnack: '+1.5'
+            hippoSnack: '+1.5',
+            comingSoon: true
         },
         {
             id: 'fusion',
@@ -241,15 +262,17 @@ function FeedNowSection({ navigate }: { navigate: (path: string) => void }) {
             description: 'Help your mates with their investments',
             icon: '🤝',
             explanation: 'Set up DCA strategies that can be shared and executed with trusted peers.',
-            hippoSnack: '+2.0'
+            hippoSnack: '+2.0',
+            comingSoon: true
         },
         {
             id: 'custom-yield',
-            title: 'DCA Yield',
+            title: 'Earn Yield',
             description: 'Complex yield strategies with 13 options',
             icon: '📈',
             explanation: 'Create sophisticated DCA strategies with advanced yield farming and risk management.',
-            hippoSnack: '+3.0'
+            hippoSnack: '+3.0',
+            comingSoon: true
         }
     ];
 
@@ -317,8 +340,13 @@ function FeedNowSection({ navigate }: { navigate: (path: string) => void }) {
                                             {/* icon + title */}
                                             <div className="flex items-center gap-2 mb-3">
                                                 <span className="text-2xl">{option.icon}</span>
-                                                <div>
+                                                <div className="flex items-center gap-2">
                                                     <h4 className="font-semibold text-gray-900">{option.title}</h4>
+                                                    {option.comingSoon && (
+                                                        <span className="inline-block bg-orange-100 text-orange-800 text-xs px-2 py-1 rounded-full font-medium">
+                                                            Coming Soon
+                                                        </span>
+                                                    )}
                                                 </div>
                                             </div>
 

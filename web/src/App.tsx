@@ -53,7 +53,7 @@ export default function App() {
         </nav>
         <div className="flex items-center gap-2 sm:gap-4">
           <GasBadge />
-          <Link to="/dca/setup">
+          <Link to="/dca/yield-feed">
             <Button className={`${emeraldColors.button} text-sm sm:text-base`}>
               Start New DCA
             </Button>
