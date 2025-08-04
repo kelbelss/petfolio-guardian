@@ -27,20 +27,47 @@ export default function Dashboard() {
     const user = userData?.data;
     const [hippoName, setHippoName] = React.useState<string>('');
 
+    // Get hippo name from local storage for non-connected users
+    const getLocalHippoName = () => {
+        if (typeof window !== 'undefined') {
+            return localStorage.getItem('localHippoName') || '';
+        }
+        return '';
+    };
+
+    // Save hippo name to local storage for non-connected users
+    const saveLocalHippoName = (name: string) => {
+        if (typeof window !== 'undefined') {
+            localStorage.setItem('localHippoName', name);
+        }
+    };
+
     // Update local state when user data changes or wallet disconnects
     React.useEffect(() => {
         if (!address) {
-            // Clear everything when wallet disconnects
-            setHippoName('');
+            // When not connected, use local storage name
+            const localName = getLocalHippoName();
+            setHippoName(localName);
             return;
         }
 
         if (user?.hippo_name) {
+            // User has a saved name in database, use that
             setHippoName(user.hippo_name);
         } else {
-            setHippoName('');
+            // User doesn't have a saved name, check if they have a local name
+            const localName = getLocalHippoName();
+            if (localName) {
+                // Save local name to database for this new user
+                setHippoName(localName);
+                updateUser({ walletAddress: address, updates: { hippo_name: localName } }).catch(error => {
+                    console.error('Failed to save local hippo name to database:', error);
+                });
+            } else {
+                setHippoName('');
+            }
         }
-    }, [user?.hippo_name, address]);
+    }, [user?.hippo_name, address, updateUser]);
 
     // Create user in Supabase if they don't exist
     React.useEffect(() => {
@@ -63,19 +90,32 @@ export default function Dashboard() {
     }, [userError]);
 
     const handleHippoNameChange = async (newName: string) => {
-        if (!address) return;
-
         try {
             setHippoName(newName);
-            await updateUser({ walletAddress: address, updates: { hippo_name: newName } });
-            toast({
-                title: "Hippo name saved!",
-                description: `${newName} will remember their name across all your devices.`,
-            });
+
+            if (address) {
+                // User is connected, save to database
+                await updateUser({ walletAddress: address, updates: { hippo_name: newName } });
+                toast({
+                    title: "Hippo name saved!",
+                    description: `${newName} will remember their name across all your devices.`,
+                });
+            } else {
+                // User is not connected, save to local storage
+                saveLocalHippoName(newName);
+                toast({
+                    title: "Hippo name saved!",
+                    description: `${newName} will be remembered when you connect your wallet.`,
+                });
+            }
         } catch (error) {
             console.error('Failed to save hippo name:', error);
             // Revert the name change if save failed
-            setHippoName(user?.hippo_name || '');
+            if (address) {
+                setHippoName(user?.hippo_name || '');
+            } else {
+                setHippoName(getLocalHippoName());
+            }
             toast({
                 title: "Failed to save name",
                 description: "Please check your connection and try again.",
@@ -99,7 +139,16 @@ export default function Dashboard() {
                                     <div>
                                         <h3 className="text-3xl lg:text-4xl font-bold text-emerald-600 mb-1">{hippoName}</h3>
                                         <button
-                                            onClick={() => setHippoName('')}
+                                            onClick={() => {
+                                                if (address) {
+                                                    // Connected user: clear from database
+                                                    handleHippoNameChange('');
+                                                } else {
+                                                    // Non-connected user: clear from local storage
+                                                    setHippoName('');
+                                                    saveLocalHippoName('');
+                                                }
+                                            }}
                                             className="text-xs text-emerald-500 hover:text-emerald-700"
                                         >
                                             Change name
