@@ -87,17 +87,17 @@ export default function Dashboard() {
 
     return (
         <div className="w-full bg-[#effdf4] min-h-screen">
-            <div className="max-w-screen-2xl mx-auto py-12">
+            <div className="max-w-7xl mx-auto py-6 px-4 sm:py-12 sm:px-6">
                 {/* Main Content - Hippo Left, Content Right */}
-                <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
+                <div className="flex flex-col lg:flex-row gap-6 lg:gap-8">
                     {/* Left Side - Hippo Section */}
-                    <div className="lg:col-span-2">
-                        <div className="text-center pr-14">
+                    <div className="lg:w-1/4">
+                        <div className="text-center lg:pr-4">
                             {/* Hippo Name */}
                             <div className="mb-4">
                                 {hippoName ? (
                                     <div>
-                                        <h3 className="text-4xl font-bold text-emerald-600 mb-1">{hippoName}</h3>
+                                        <h3 className="text-3xl lg:text-4xl font-bold text-emerald-600 mb-1">{hippoName}</h3>
                                         <button
                                             onClick={() => setHippoName('')}
                                             className="text-xs text-emerald-500 hover:text-emerald-700"
@@ -110,7 +110,7 @@ export default function Dashboard() {
                                         <input
                                             type="text"
                                             placeholder="Name your hippo..."
-                                            className="w-64 px-4 py-2 border-2 border-emerald-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-center bg-white shadow-sm"
+                                            className="w-full max-w-64 px-4 py-2 border-2 border-emerald-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-center bg-white shadow-sm"
                                             onKeyPress={(e) => {
                                                 if (e.key === 'Enter' && e.currentTarget.value.trim()) {
                                                     handleHippoNameChange(e.currentTarget.value.trim());
@@ -123,25 +123,23 @@ export default function Dashboard() {
                                 )}
                             </div>
 
-                            <div className="w-[500px] h-[500px] mb-6">
-                                <img
-                                    src={(() => {
-                                        const health = healthRecordData?.data?.current_health;
-                                        if (!health) return '/src/assets/HipposHappy.gif';
-                                        if (health <= 3) return '/src/assets/HipposSad.gif';
-                                        if (health <= 6) return '/src/assets/HipposMid.gif';
-                                        return '/src/assets/HipposHappy.gif';
-                                    })()}
-                                    alt="Hippo"
-                                    className="w-[700px] h-[700px] object-contain"
-                                />
-                            </div>
+                            <img
+                                src={(() => {
+                                    const health = healthRecordData?.data?.current_health;
+                                    if (!health) return '/HipposHappy.gif';
+                                    if (health <= 3) return '/HipposSad.gif';
+                                    if (health <= 6) return '/HipposMid.gif';
+                                    return '/HipposHappy.gif';
+                                })()}
+                                alt="Hippo"
+                                className="w-full h-auto object-contain"
+                            />
 
                         </div>
                     </div>
 
                     {/* Right Side - Dashboard Content */}
-                    <div className="lg:col-span-3 space-y-6">
+                    <div className="lg:w-3/4 space-y-6">
                         {/* Explanation Header */}
                         <div className="mb-6 p-6 bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-lg shadow-md">
                             <h2 className="text-2xl font-bold text-white mb-2">

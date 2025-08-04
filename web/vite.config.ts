@@ -12,6 +12,11 @@ export default defineConfig({
       '@': '/src',
     },
   },
+  build: {
+    rollupOptions: {
+      external: ['bignumber.js'],
+    },
+  },
   define: {
     global: 'globalThis',
     'process.env': '{}',

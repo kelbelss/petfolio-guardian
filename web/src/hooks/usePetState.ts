@@ -141,13 +141,13 @@ export function usePetState() {
   const getHippoImage = (): string => {
     switch (petState.mood) {
       case 'hungry':
-        return '/src/assets/HipposSad.gif';
+        return '/HipposSad.gif';
       case 'neutral':
-        return '/src/assets/HipposMid.gif';
+        return '/HipposMid.gif';
       case 'happy':
-        return '/src/assets/HipposHappy.gif';
+        return '/HipposHappy.gif';
       default:
-        return '/src/assets/HipposHappy.gif';
+        return '/HipposHappy.gif';
     }
   };
 
