@@ -27,20 +27,47 @@ export default function Dashboard() {
     const user = userData?.data;
     const [hippoName, setHippoName] = React.useState<string>('');
 
+    // Get hippo name from local storage for non-connected users
+    const getLocalHippoName = () => {
+        if (typeof window !== 'undefined') {
+            return localStorage.getItem('localHippoName') || '';
+        }
+        return '';
+    };
+
+    // Save hippo name to local storage for non-connected users
+    const saveLocalHippoName = (name: string) => {
+        if (typeof window !== 'undefined') {
+            localStorage.setItem('localHippoName', name);
+        }
+    };
+
     // Update local state when user data changes or wallet disconnects
     React.useEffect(() => {
         if (!address) {
-            // Clear everything when wallet disconnects
-            setHippoName('');
+            // When not connected, use local storage name
+            const localName = getLocalHippoName();
+            setHippoName(localName);
             return;
         }
 
         if (user?.hippo_name) {
+            // User has a saved name in database, use that
             setHippoName(user.hippo_name);
         } else {
-            setHippoName('');
+            // User doesn't have a saved name, check if they have a local name
+            const localName = getLocalHippoName();
+            if (localName) {
+                // Save local name to database for this new user
+                setHippoName(localName);
+                updateUser({ walletAddress: address, updates: { hippo_name: localName } }).catch(error => {
+                    console.error('Failed to save local hippo name to database:', error);
+                });
+            } else {
+                setHippoName('');
+            }
         }
-    }, [user?.hippo_name, address]);
+    }, [user?.hippo_name, address, updateUser]);
 
     // Create user in Supabase if they don't exist
     React.useEffect(() => {
@@ -63,19 +90,32 @@ export default function Dashboard() {
     }, [userError]);
 
     const handleHippoNameChange = async (newName: string) => {
-        if (!address) return;
-
         try {
             setHippoName(newName);
-            await updateUser({ walletAddress: address, updates: { hippo_name: newName } });
-            toast({
-                title: "Hippo name saved!",
-                description: `${newName} will remember their name across all your devices.`,
-            });
+
+            if (address) {
+                // User is connected, save to database
+                await updateUser({ walletAddress: address, updates: { hippo_name: newName } });
+                toast({
+                    title: "Hippo name saved!",
+                    description: `${newName} will remember their name across all your devices.`,
+                });
+            } else {
+                // User is not connected, save to local storage
+                saveLocalHippoName(newName);
+                toast({
+                    title: "Hippo name saved!",
+                    description: `${newName} will be remembered when you connect your wallet.`,
+                });
+            }
         } catch (error) {
             console.error('Failed to save hippo name:', error);
             // Revert the name change if save failed
-            setHippoName(user?.hippo_name || '');
+            if (address) {
+                setHippoName(user?.hippo_name || '');
+            } else {
+                setHippoName(getLocalHippoName());
+            }
             toast({
                 title: "Failed to save name",
                 description: "Please check your connection and try again.",
@@ -86,20 +126,29 @@ export default function Dashboard() {
 
 
     return (
-        <div className="w-full bg-[#effdf4] min-h-screen">
-            <div className="max-w-screen-2xl mx-auto py-12">
+        <div className="w-full bg-[#f0fbf3] min-h-screen">
+            <div className="max-w-7xl mx-auto py-6 px-4 sm:py-12 sm:px-6">
                 {/* Main Content - Hippo Left, Content Right */}
-                <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
+                <div className="flex flex-col lg:flex-row gap-6 lg:gap-8">
                     {/* Left Side - Hippo Section */}
-                    <div className="lg:col-span-2">
-                        <div className="text-center pr-14">
+                    <div className="lg:w-1/4">
+                        <div className="text-center lg:pr-4">
                             {/* Hippo Name */}
                             <div className="mb-4">
                                 {hippoName ? (
                                     <div>
-                                        <h3 className="text-4xl font-bold text-emerald-600 mb-1">{hippoName}</h3>
+                                        <h3 className="text-3xl lg:text-4xl font-bold text-emerald-600 mb-1">{hippoName}</h3>
                                         <button
-                                            onClick={() => setHippoName('')}
+                                            onClick={() => {
+                                                if (address) {
+                                                    // Connected user: clear from database
+                                                    handleHippoNameChange('');
+                                                } else {
+                                                    // Non-connected user: clear from local storage
+                                                    setHippoName('');
+                                                    saveLocalHippoName('');
+                                                }
+                                            }}
                                             className="text-xs text-emerald-500 hover:text-emerald-700"
                                         >
                                             Change name
@@ -110,7 +159,7 @@ export default function Dashboard() {
                                         <input
                                             type="text"
                                             placeholder="Name your hippo..."
-                                            className="w-64 px-4 py-2 border-2 border-emerald-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-center bg-white shadow-sm"
+                                            className="w-full max-w-64 px-4 py-2 border-2 border-emerald-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-center bg-white shadow-sm"
                                             onKeyPress={(e) => {
                                                 if (e.key === 'Enter' && e.currentTarget.value.trim()) {
                                                     handleHippoNameChange(e.currentTarget.value.trim());
@@ -123,25 +172,23 @@ export default function Dashboard() {
                                 )}
                             </div>
 
-                            <div className="w-[500px] h-[500px] mb-6">
-                                <img
-                                    src={(() => {
-                                        const health = healthRecordData?.data?.current_health;
-                                        if (!health) return '/src/assets/HipposHappy.gif';
-                                        if (health <= 3) return '/src/assets/HipposSad.gif';
-                                        if (health <= 6) return '/src/assets/HipposMid.gif';
-                                        return '/src/assets/HipposHappy.gif';
-                                    })()}
-                                    alt="Hippo"
-                                    className="w-[700px] h-[700px] object-contain"
-                                />
-                            </div>
+                            <img
+                                src={(() => {
+                                    const health = healthRecordData?.data?.current_health;
+                                    if (!health) return '/HipposHappy.gif';
+                                    if (health <= 3) return '/HipposSad.gif';
+                                    if (health <= 6) return '/HipposMid.gif';
+                                    return '/HipposHappy.gif';
+                                })()}
+                                alt="Hippo"
+                                className="w-full h-auto object-contain"
+                            />
 
                         </div>
                     </div>
 
                     {/* Right Side - Dashboard Content */}
-                    <div className="lg:col-span-3 space-y-6">
+                    <div className="lg:w-3/4 space-y-6">
                         {/* Explanation Header */}
                         <div className="mb-6 p-6 bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-lg shadow-md">
                             <h2 className="text-2xl font-bold text-white mb-2">
@@ -188,12 +235,25 @@ function FeedNowSection({ navigate }: { navigate: (path: string) => void }) {
     const { toast } = useToast();
     const scrollContainerRef = React.useRef<HTMLDivElement>(null);
 
+    interface SwapOption {
+        id: string;
+        title: string;
+        description: string;
+        icon: string;
+        explanation: string;
+        hippoSnack: string;
+        comingSoon?: boolean;
+    }
+
     // Handle Feed Now button based on selection
     const handleFeedNow = async () => {
         if (!address || !walletClient) {
             toast({ title: 'Wallet not connected', variant: 'destructive' });
             return;
         }
+
+
+
 
         if (selectedOption === 'regular') {
             navigate('/regular-swap');
@@ -220,7 +280,7 @@ function FeedNowSection({ navigate }: { navigate: (path: string) => void }) {
     };
 
     // STATIC DEMO SWAP OPTIONS
-    const swapOptions = [
+    const swapOptions: SwapOption[] = [
         {
             id: 'regular',
             title: 'Instant Swap',
@@ -235,7 +295,8 @@ function FeedNowSection({ navigate }: { navigate: (path: string) => void }) {
             description: 'Regular self-investment strategy',
             icon: '👤',
             explanation: 'Create recurring DCA feeds to automatically feed your hippo on schedule.',
-            hippoSnack: '+1.5'
+            hippoSnack: '+1.5',
+            comingSoon: true
         },
         {
             id: 'fusion',
@@ -243,15 +304,17 @@ function FeedNowSection({ navigate }: { navigate: (path: string) => void }) {
             description: 'Help your mates with their investments',
             icon: '🤝',
             explanation: 'Set up DCA strategies that can be shared and executed with trusted peers.',
-            hippoSnack: '+2.0'
+            hippoSnack: '+2.0',
+            comingSoon: true
         },
         {
             id: 'custom-yield',
-            title: 'DCA Yield',
+            title: 'Earn Yield',
             description: 'Complex yield strategies with 13 options',
             icon: '📈',
             explanation: 'Create sophisticated DCA strategies with advanced yield farming and risk management.',
-            hippoSnack: '+3.0'
+            hippoSnack: '+3.0',
+            comingSoon: true
         }
     ];
 
@@ -319,8 +382,13 @@ function FeedNowSection({ navigate }: { navigate: (path: string) => void }) {
                                             {/* icon + title */}
                                             <div className="flex items-center gap-2 mb-3">
                                                 <span className="text-2xl">{option.icon}</span>
-                                                <div>
+                                                <div className="flex items-center gap-2">
                                                     <h4 className="font-semibold text-gray-900">{option.title}</h4>
+                                                    {option.comingSoon && (
+                                                        <span className="inline-block bg-orange-100 text-orange-800 text-xs px-2 py-1 rounded-full font-medium">
+                                                            Coming Soon
+                                                        </span>
+                                                    )}
                                                 </div>
                                             </div>
 

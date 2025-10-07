@@ -176,7 +176,12 @@ export default function FriendDcaWizard() {
         <div className="w-full bg-[#effdf4] min-h-screen">
             <div className="max-w-4xl mx-auto p-8">
                 <div className="mb-8">
-                    <h1 className="text-4xl font-bold text-emerald-700 mb-2">Create Peer DCA Strategy</h1>
+                    <div className="flex items-center gap-3 mb-2">
+                        <h1 className="text-4xl font-bold text-emerald-700">Create Peer DCA Strategy</h1>
+                        <span className="inline-block bg-orange-100 text-orange-800 text-sm px-3 py-1 rounded-full font-medium">
+                            Coming Soon
+                        </span>
+                    </div>
                     <p className="text-gray-600 text-lg">Set up automated DCA for your friends to help them build wealth</p>
                 </div>
 
@@ -367,12 +372,18 @@ export default function FriendDcaWizard() {
                         >
                             Cancel
                         </button>
-                        <button
-                            type="submit"
-                            className="px-8 py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-lg hover:from-emerald-600 hover:to-emerald-700 transition-all font-medium shadow-sm hover:shadow-md"
-                        >
-                            Continue to Review →
-                        </button>
+                        <div className="flex items-center gap-3">
+                            <span className="inline-block bg-orange-100 text-orange-800 text-sm px-3 py-1 rounded-full font-medium">
+                                Coming Soon
+                            </span>
+                            <button
+                                type="submit"
+                                disabled
+                                className="px-8 py-3 bg-gray-400 text-white rounded-lg cursor-not-allowed font-medium shadow-sm opacity-50"
+                            >
+                                Create Peer DCA Feed
+                            </button>
+                        </div>
                     </div>
                 </form>
             </div>

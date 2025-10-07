@@ -29,32 +29,35 @@ export default function App() {
 
   return (
     <Web3Providers>
-      <header className="flex justify-between items-center p-4 w-full bg-white border-b border-gray-200">
-        <Link to="/" className="flex items-center gap-3 text-2xl font-bold text-emerald-600">
-          <img src="/src/assets/faviconpet.png" alt="Petfolio Guardian" className="w-8 h-8" />
+      <header className="flex flex-col sm:flex-row justify-between items-center p-4 w-full bg-white border-b border-gray-200 gap-4">
+        <Link to="/" className="flex items-center gap-3 text-xl sm:text-2xl font-bold text-emerald-600">
+          <img src="/faviconpet.png" alt="Petfolio Guardian" className="w-8 h-8" />
           Petfolio Guardian
         </Link>
-        <nav className="flex gap-6">
-          <Link to="/" className="text-emerald-600 hover:text-emerald-700 text-lg font-medium">
+        <nav className="flex flex-wrap gap-4 sm:gap-6 justify-center">
+          <Link to="/" className="text-emerald-600 hover:text-emerald-700 text-base sm:text-lg font-medium">
             Home
           </Link>
-          <Link to="/dca/yield-feed" className="text-emerald-600 hover:text-emerald-700 text-lg font-medium">
+          <Link to="/dca/yield-feed" className="text-emerald-600 hover:text-emerald-700 text-base sm:text-lg font-medium">
             DCA
           </Link>
-          <Link to="/dca/feeds" className="text-emerald-600 hover:text-emerald-700 text-lg font-medium">
+          <Link to="/dca/feeds" className="text-emerald-600 hover:text-emerald-700 text-base sm:text-lg font-medium">
             Feeds
           </Link>
-          <Link to="/market-analysis" className="text-emerald-600 hover:text-emerald-700 text-lg font-medium">
+          <Link to="/test-1inch" className="text-emerald-600 hover:text-emerald-700 text-base sm:text-lg font-medium">
+            Test SDK
+          </Link>
+          <Link to="/market-analysis" className="text-emerald-600 hover:text-emerald-700 text-base sm:text-lg font-medium">
             Markets
           </Link>
-          <Link to="/about" className="text-emerald-600 hover:text-emerald-700 text-lg font-medium">
+          <Link to="/about" className="text-emerald-600 hover:text-emerald-700 text-base sm:text-lg font-medium">
             About
           </Link>
         </nav>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 sm:gap-4">
           <GasBadge />
-          <Link to="/dca/setup">
-            <Button className={emeraldColors.button}>
+          <Link to="/dca/yield-feed">
+            <Button className={`${emeraldColors.button} text-sm sm:text-base`}>
               Start New DCA
             </Button>
           </Link>
@@ -76,6 +79,7 @@ export default function App() {
           <Route path="/dca/peer-dca" element={<PeerDcaWizard />} />
           <Route path="/dca/token-dca" element={<TokenDcaWizard />} />
           <Route path="/test-input" element={<TestInput />} />
+
           <Route path="/about" element={<HowItWorks />} />
           <Route path="*" element={<div className="max-w-3xl mx-auto p-6">Not Found</div>} />
         </Routes>

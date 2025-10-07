@@ -68,7 +68,7 @@ export const BASE_TOKENS = {
 // ============================================================================
 
 export const CONTRACT_ADDRESSES = {
-  // Limit Order Protocol (1inch Router)
+  // Limit Order Protocol (Base Mainnet) - Try the other known address
   LIMIT_ORDER_PROTOCOL: '0x111111125421cA6dc452d289314280a0f8842A65' as `0x${string}`,
   
   // Your custom contracts (update these with your deployed addresses)
