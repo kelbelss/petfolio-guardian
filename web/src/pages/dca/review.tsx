@@ -328,6 +328,8 @@ export default function TokenDcaReview() {
             return;
         }
 
+
+
         // Handle swap mode differently - immediate execution
         if (draft.mode === 'swap') {
             // Navigate to regular swap page with pre-filled data
@@ -394,6 +396,28 @@ export default function TokenDcaReview() {
                     order: order,
                     signature: signature
                 });
+
+                // 🔍 DETAILED ORDER DEBUGGING
+                console.log('🔍 DETAILED ORDER ANALYSIS:');
+                console.log('🔍 Order hash:', order.hash);
+                console.log('🔍 Order structure:', JSON.stringify(order, null, 2));
+                console.log('🔍 Signature length:', signature.length);
+                console.log('🔍 Signature:', signature);
+                console.log('🔍 TWAP params:', {
+                    interval: twapParams.twapParams.interval,
+                    chunks: twapParams.twapParams.chunks,
+                    chunkIn: twapParams.twapParams.chunkIn.toString(),
+                    minOut: twapParams.twapParams.minOut.toString(),
+                });
+                console.log('🔍 Aave params:', {
+                    depositToAave: draft.mode === 'your-aave-yield',
+                    recipient: draft.mode === 'peer-dca' ? draft.recipient : address,
+                    aavePool: draft.mode === 'your-aave-yield' ? (draft.aavePool || '') : '',
+                });
+                console.log('🔍 Interactions length:', order.interactions?.length || 0);
+                console.log('🔍 Interactions:', order.interactions);
+                console.log('🔍 Raw order length:', order.rawOrder?.length || 0);
+                console.log('🔍 Raw order:', order.rawOrder);
 
                 // 7) Check and set token allowance for Limit Order Protocol
                 const BYPASS_ALLOWANCE_CHECK = true; // Set to true to skip allowance check for testing
@@ -477,23 +501,35 @@ export default function TokenDcaReview() {
                     });
                 }
 
-                // 8) Submit order to LimitOrderProtocol
-                const ENABLE_ONCHAIN_SUBMISSION = true;
+                // 8) Submit order to LimitOrderProtocol (only for regular swaps, not DCA feeds)
+                const ENABLE_ONCHAIN_SUBMISSION = false; // Disable immediate execution for now - focus on diagnostic
                 let orderHash: string | undefined;
                 if (ENABLE_ONCHAIN_SUBMISSION) {
                     try {
                         toast({ title: '3️⃣ Submitting order to blockchain...' });
 
-                        console.log('Submitting order to LimitOrderProtocol:', {
-                            order: order,
-                            signature: signature,
-                            account: address
-                        });
+                        console.log('🚀 SUBMITTING ORDER TO LIMITORDERPROTOCOL:');
+                        console.log('🚀 Account:', address);
+                        console.log('🚀 Order hash:', order.hash);
+                        console.log('🚀 Signature:', signature);
+                        console.log('🚀 Full order object:', order);
+
+                        // 🔍 DETAILED TRANSACTION DEBUGGING
+                        console.log('🔍 TRANSACTION PARAMETERS:');
+                        console.log('🔍 Wallet client:', !!walletClient);
+                        console.log('🔍 Public client:', !!publicClient);
+                        console.log('🔍 Order type:', typeof order);
+                        console.log('🔍 Order keys:', Object.keys(order));
+                        console.log('🔍 Signature type:', typeof signature);
+                        console.log('🔍 Signature length:', signature.length);
+                        console.log('🔍 Account type:', typeof address);
+                        console.log('🔍 Skip validation:', BYPASS_ALLOWANCE_CHECK);
 
                         console.log('🔍 Full order structure for debugging:', {
                             orderHash: order.hash,
                             permit: order.permit,
                             interactions: order.interactions,
+                            rawOrder: order.rawOrder,
                             // Note: Other fields are in typedData.message
                         });
 
@@ -504,9 +540,19 @@ export default function TokenDcaReview() {
                             console.warn('⚠️ Low ETH balance for gas fees');
                         }
 
+                        console.log('🚀 CALLING fillOrderTxV2...');
+                        console.log('🚀 Parameters being passed:');
+                        console.log('  - walletClient:', !!walletClient);
+                        console.log('  - publicClient:', !!publicClient);
+                        console.log('  - order:', order);
+                        console.log('  - signature:', signature);
+                        console.log('  - account:', address);
+                        console.log('  - skipValidation:', BYPASS_ALLOWANCE_CHECK);
+
                         orderHash = await fillOrderTx(walletClient!, publicClient as PublicClient, order, signature, address as `0x${string}`, BYPASS_ALLOWANCE_CHECK);
 
-                        console.log('Order submitted successfully:', orderHash);
+                        console.log('✅ Order submitted successfully:', orderHash);
+                        console.log('✅ Transaction hash:', orderHash);
                         toast({
                             title: '✅ Order Submitted!',
                             description: `Transaction: ${shortHash(orderHash)}`
@@ -515,7 +561,19 @@ export default function TokenDcaReview() {
                         // Wait for order confirmation
                         await new Promise(resolve => setTimeout(resolve, 5000));
                     } catch (orderSubmitError) {
-                        console.error('Order submission failed:', orderSubmitError);
+                        console.error('❌ ORDER SUBMISSION FAILED:');
+                        console.error('❌ Error type:', typeof orderSubmitError);
+                        console.error('❌ Error constructor:', orderSubmitError?.constructor?.name);
+                        console.error('❌ Error message:', orderSubmitError instanceof Error ? orderSubmitError.message : String(orderSubmitError));
+                        console.error('❌ Error stack:', orderSubmitError instanceof Error ? orderSubmitError.stack : 'No stack trace');
+                        console.error('❌ Full error object:', orderSubmitError);
+
+                        // Try to extract more details from the error
+                        if (orderSubmitError && typeof orderSubmitError === 'object') {
+                            console.error('❌ Error properties:', Object.keys(orderSubmitError));
+                            console.error('❌ Error details:', JSON.stringify(orderSubmitError, null, 2));
+                        }
+
                         toast({
                             title: '❌ Order Submission Failed',
                             description: orderSubmitError instanceof Error ? orderSubmitError.message : String(orderSubmitError),
@@ -523,6 +581,23 @@ export default function TokenDcaReview() {
                         });
                         throw orderSubmitError; // Re-throw to prevent saving to Supabase
                     }
+                } else {
+                    // For DCA feeds, just log the order details - bot will execute later
+                    console.log('📋 DCA Feed Order Created:');
+                    console.log('  - Order Hash:', order.hash);
+                    console.log('  - Order Signature:', signature);
+                    console.log('  - TWAP Parameters:', twapParams);
+                    console.log('  - Aave Parameters:', {
+                        depositToAave: draft.mode === 'your-aave-yield',
+                        recipient: draft.mode === 'peer-dca' ? draft.recipient : address,
+                        aavePool: draft.mode === 'your-aave-yield' ? (draft.aavePool || '') : '',
+                    });
+                    console.log('  - Bot will execute this order over time');
+
+                    toast({
+                        title: '✅ DCA Feed Order Created!',
+                        description: `Order ${shortHash(order.hash)} signed and ready for bot execution`
+                    });
                 }
 
                 // 10) Persist to Supabase for bot execution
@@ -794,13 +869,17 @@ export default function TokenDcaReview() {
                     >
                         ← Back to Setup
                     </Button>
-                    <Button
-                        onClick={handleConfirm}
-                        disabled={isLoading}
-                        className="bg-gradient-to-r from-emerald-500 to-emerald-600 text-white hover:from-emerald-600 hover:to-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                        {isLoading ? 'Creating Order...' : `Create ${draft.mode === 'swap' ? 'Swap' : draft.mode === 'peer-dca' ? 'Peer DCA' : draft.mode === 'your-aave-yield' ? 'Aave Yield' : 'DCA'} Strategy`}
-                    </Button>
+                    <div className="space-y-2">
+                        <Button
+                            onClick={handleConfirm}
+                            disabled={isLoading}
+                            className="bg-gradient-to-r from-emerald-500 to-emerald-600 text-white hover:from-emerald-600 hover:to-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed w-full"
+                        >
+                            {isLoading ? 'Creating Order...' : `Create ${draft.mode === 'swap' ? 'Swap' : draft.mode === 'peer-dca' ? 'Peer DCA' : draft.mode === 'your-aave-yield' ? 'Aave Yield' : 'DCA'} Strategy`}
+                        </Button>
+
+
+                    </div>
                 </CardFooter>
             </div>
         </div>

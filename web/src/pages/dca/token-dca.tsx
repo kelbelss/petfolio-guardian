@@ -9,7 +9,6 @@ import { useAccount } from 'wagmi';
 import { useBalances, useTokens, useTokenPrice, type TokenMeta, normalizeBalances } from '@/lib/oneInchService';
 import { toFloat, decodeUsd } from '@/lib/tokenUtils';
 import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
 import TokenInput from '@/components/TokenInput/TokenInput';
 import { Calendar } from '@/components/ui/calendar';
 import ConnectButton from '@/components/ConnectButton';
@@ -93,19 +92,6 @@ export default function FeedWizard() {
     const { data: rawFromPrice } = useTokenPrice(fromToken?.address || '');
     const { data: rawToPrice } = useTokenPrice(toToken?.address || '');
 
-    // Show connect wallet screen if not connected
-    if (!address) {
-        return (
-            <div className="w-full bg-[#effdf4] min-h-screen flex items-center justify-center">
-                <div className="bg-white rounded-2xl p-12 border border-green-200 shadow-lg max-w-2xl mx-auto text-center">
-                    <h2 className="text-2xl font-bold mb-4 text-emerald-700">Connect Your Wallet</h2>
-                    <p className="text-gray-600 mb-6">Connect your wallet to create a DCA feed</p>
-                    <ConnectButton />
-                </div>
-            </div>
-        );
-    }
-
     // 🆕 helper – keep renders clean
     const getUsd = (priceObj: Record<string, string> | undefined, addr?: string) =>
         decodeUsd(priceObj, addr);
@@ -138,6 +124,19 @@ export default function FeedWizard() {
         return { balance, usdValue, symbol: fromToken.symbol };
     }, [balancesData, fromToken, fromPriceUsd]);
 
+    // Show connect wallet screen if not connected
+    if (!address) {
+        return (
+            <div className="w-full bg-[#effdf4] min-h-screen flex items-center justify-center">
+                <div className="bg-white rounded-2xl p-12 border border-green-200 shadow-lg max-w-2xl mx-auto text-center">
+                    <h2 className="text-2xl font-bold mb-4 text-emerald-700">Connect Your Wallet</h2>
+                    <p className="text-gray-600 mb-6">Connect your wallet to create a DCA feed</p>
+                    <ConnectButton />
+                </div>
+            </div>
+        );
+    }
+
     const onSubmit = (data: FormValues) => {
         setDraft({
             srcToken: data.srcToken,
@@ -158,9 +157,7 @@ export default function FeedWizard() {
                 <div className="mb-8">
                     <div className="flex items-center gap-3 mb-2">
                         <h1 className="text-4xl font-bold text-emerald-700">Create DCA Feed</h1>
-                        <span className="inline-block bg-orange-100 text-orange-800 text-sm px-3 py-1 rounded-full font-medium">
-                            Coming Soon
-                        </span>
+
                     </div>
                     <p className="text-gray-600 text-lg">Set up automated token purchases to keep your pet healthy</p>
                 </div>
@@ -337,13 +334,18 @@ export default function FeedWizard() {
                         >
                             Cancel
                         </button>
-                        <button
-                            type="submit"
-                            disabled={true}
-                            className="px-8 py-3 bg-gray-400 text-white rounded-lg cursor-not-allowed font-medium shadow-sm"
-                        >
-                            Coming Soon
-                        </button>
+                        <div className="flex items-center gap-3">
+                            <span className="inline-block bg-orange-100 text-orange-800 text-sm px-3 py-1 rounded-full font-medium">
+                                Coming Soon
+                            </span>
+                            <button
+                                type="submit"
+                                disabled
+                                className="px-8 py-3 bg-gray-400 text-white rounded-lg cursor-not-allowed font-medium shadow-sm opacity-50"
+                            >
+                                Create DCA Feed
+                            </button>
+                        </div>
                     </div>
                 </form>
             </div>

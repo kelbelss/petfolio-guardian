@@ -1,6 +1,6 @@
 // src/lib/hooks/useLimitOrderV2.ts - Using 1inch SDK for proper EIP-712 integration
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { buildAndSignOrderV2, fillOrderTxV2, remainingV2, test1inchSDK } from '@/lib/limitOrderV2';
+import { buildAndSignOrderV2, fillOrderTxV2, remainingV2 } from '@/lib/limitOrderV2';
 import { createWalletClient, custom, maxUint256, type WalletClient, type PublicClient } from 'viem';
 import { base } from 'viem/chains';
 import ERC20_ABI from '@/abis/ERC20.json';
@@ -89,11 +89,7 @@ export const useApproveV2 = () =>
       }),
   });
 
-/** test 1inch SDK integration */
-export const useTest1inchSDK = () =>
-  useMutation({
-    mutationFn: test1inchSDK,
-  });
+
 
 /** cancel a limit order on-chain */
 export const useCancelOrderV2 = () =>

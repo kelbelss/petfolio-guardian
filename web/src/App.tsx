@@ -44,6 +44,9 @@ export default function App() {
           <Link to="/dca/feeds" className="text-emerald-600 hover:text-emerald-700 text-base sm:text-lg font-medium">
             Feeds
           </Link>
+          <Link to="/test-1inch" className="text-emerald-600 hover:text-emerald-700 text-base sm:text-lg font-medium">
+            Test SDK
+          </Link>
           <Link to="/market-analysis" className="text-emerald-600 hover:text-emerald-700 text-base sm:text-lg font-medium">
             Markets
           </Link>
@@ -76,6 +79,7 @@ export default function App() {
           <Route path="/dca/peer-dca" element={<PeerDcaWizard />} />
           <Route path="/dca/token-dca" element={<TokenDcaWizard />} />
           <Route path="/test-input" element={<TestInput />} />
+
           <Route path="/about" element={<HowItWorks />} />
           <Route path="*" element={<div className="max-w-3xl mx-auto p-6">Not Found</div>} />
         </Routes>

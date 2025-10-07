@@ -229,9 +229,7 @@ export default function AaveYieldWizard() {
                 <div className="mb-8">
                     <div className="flex items-center gap-3 mb-2">
                         <h1 className="text-4xl font-bold text-emerald-700">Create Your Aave Yield Strategy</h1>
-                        <span className="inline-block bg-orange-100 text-orange-800 text-sm px-3 py-1 rounded-full font-medium">
-                            Coming Soon
-                        </span>
+
                     </div>
                     <p className="text-gray-600 text-lg">Set up automated yield farming on Aave to maximize your returns</p>
                 </div>
@@ -503,13 +501,18 @@ export default function AaveYieldWizard() {
                         >
                             Cancel
                         </button>
-                        <button
-                            type="submit"
-                            disabled={true}
-                            className="px-8 py-3 bg-gray-400 text-white rounded-lg cursor-not-allowed font-medium shadow-sm"
-                        >
-                            Coming Soon
-                        </button>
+                        <div className="flex items-center gap-3">
+                            <span className="inline-block bg-orange-100 text-orange-800 text-sm px-3 py-1 rounded-full font-medium">
+                                Coming Soon
+                            </span>
+                            <button
+                                type="submit"
+                                disabled
+                                className="px-8 py-3 bg-gray-400 text-white rounded-lg cursor-not-allowed font-medium shadow-sm opacity-50"
+                            >
+                                Create Aave Strategy
+                            </button>
+                        </div>
                     </div>
                 </form>
             </div>

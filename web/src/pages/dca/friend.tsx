@@ -372,13 +372,18 @@ export default function FriendDcaWizard() {
                         >
                             Cancel
                         </button>
-                        <button
-                            type="submit"
-                            disabled={true}
-                            className="px-8 py-3 bg-gray-400 text-white rounded-lg cursor-not-allowed font-medium shadow-sm"
-                        >
-                            Coming Soon
-                        </button>
+                        <div className="flex items-center gap-3">
+                            <span className="inline-block bg-orange-100 text-orange-800 text-sm px-3 py-1 rounded-full font-medium">
+                                Coming Soon
+                            </span>
+                            <button
+                                type="submit"
+                                disabled
+                                className="px-8 py-3 bg-gray-400 text-white rounded-lg cursor-not-allowed font-medium shadow-sm opacity-50"
+                            >
+                                Create Peer DCA Feed
+                            </button>
+                        </div>
                     </div>
                 </form>
             </div>

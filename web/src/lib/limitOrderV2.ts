@@ -1,6 +1,6 @@
 // src/lib/limitOrderV2.ts - Using 1inch SDK for proper EIP-712 integration
 import { LimitOrder, MakerTraits, Address } from '@1inch/limit-order-sdk';
-import { getAddress, hexToBytes, bytesToHex, encodeAbiParameters, parseAbiParameters, type PublicClient, type WalletClient } from 'viem';
+import { getAddress, encodeAbiParameters, type PublicClient, type WalletClient } from 'viem';
 import { base } from 'viem/chains';
 import { CONTRACT_ADDRESSES } from '@/config/base';
 import { toWei } from '@/lib/utils';
@@ -58,7 +58,7 @@ export async function buildAndSignOrderV2(
   const makerTraits = MakerTraits.default().withExpiration(expiration);
 
   // --- START: Permit2 Signature Generation ---
-  let permitSignature: `0x${string}` = "0x";
+  const permitSignature: `0x${string}` = "0x";
   // TEMPORARILY DISABLE PERMIT2 FOR BASIC WORKING ORDER
   console.log('⚠️ Permit2 temporarily disabled for basic working order');
   
@@ -93,11 +93,28 @@ export async function buildAndSignOrderV2(
 
   // Build interactions if TWAP or Aave params are provided
   let interactions: `0x${string}` = "0x";
-  // TEMPORARILY DISABLE INTERACTIONS FOR BASIC WORKING ORDER
-  console.log('⚠️ Interactions temporarily disabled for basic working order');
   
-  // if (params.twapParams || params.aaveParams) {
-  //   // TEMPORARILY DISABLE INTERACTIONS FOR TESTING
+  if (params.twapParams || params.aaveParams) {
+    console.log('🔧 Building interactions for TWAP/Aave...');
+    const { encodeTwapAaveInteractions } = await import('./interactionsEncoder');
+    
+    if (params.twapParams && params.aaveParams) {
+      interactions = encodeTwapAaveInteractions(
+        params.twapParams,
+        params.aaveParams
+      );
+    } else if (params.twapParams) {
+      const { encodeTwapInteractions } = await import('./interactionsEncoder');
+      interactions = encodeTwapInteractions(params.twapParams);
+    } else if (params.aaveParams) {
+      const { encodeAaveInteractions } = await import('./interactionsEncoder');
+      interactions = encodeAaveInteractions(params.aaveParams);
+    }
+    
+    console.log('✅ Interactions encoded:', interactions);
+  } else {
+    console.log('ℹ️ No TWAP/Aave params provided, using empty interactions');
+  }
   //   console.log('⚠️ Interactions temporarily disabled for testing');
   //   interactions = "0x";
   // }
@@ -128,6 +145,28 @@ export async function buildAndSignOrderV2(
 
   console.log('✅ Order created with 1inch SDK:', order);
 
+  // 🔍 INSPECT RAW ORDER BYTES
+  try {
+    const orderStruct = order.build();
+    console.log('🔍 order.build() result:', orderStruct);
+    console.log('🔍 order.build() type:', typeof orderStruct);
+    console.log('🔍 order.build() keys:', Object.keys(orderStruct));
+    console.log('🔍 order.build() JSON:', JSON.stringify(orderStruct, null, 2));
+    
+    // For now, just log the structure to understand the format
+    console.log('🔍 Individual fields:');
+    console.log('  makerAsset:', orderStruct.makerAsset, typeof orderStruct.makerAsset);
+    console.log('  takerAsset:', orderStruct.takerAsset, typeof orderStruct.takerAsset);
+    console.log('  makingAmount:', orderStruct.makingAmount, typeof orderStruct.makingAmount);
+    console.log('  takingAmount:', orderStruct.takingAmount, typeof orderStruct.takingAmount);
+    console.log('  maker:', orderStruct.maker, typeof orderStruct.maker);
+    console.log('  receiver:', orderStruct.receiver, typeof orderStruct.receiver);
+    console.log('  salt:', orderStruct.salt, typeof orderStruct.salt);
+    console.log('  makerTraits:', orderStruct.makerTraits, typeof orderStruct.makerTraits);
+  } catch (error) {
+    console.error('❌ Error getting raw order:', error);
+  }
+
   // Get the typed data for EIP-712 signing
   const typedData = order.getTypedData(base.id);
   
@@ -152,6 +191,119 @@ export async function buildAndSignOrderV2(
   const orderHash = order.getOrderHash(base.id);
   
   console.log('🔍 Order hash:', orderHash);
+  
+  // Verify EIP-712 domain matches contract address
+  console.log('🔍 EIP-712 Domain Verification:');
+  console.log('🔍 verifyingContract:', typedData.domain.verifyingContract);
+  console.log('🔍 LOP address:', CONTRACT_ADDRESSES.LIMIT_ORDER_PROTOCOL);
+  console.log('🔍 Domain matches:', typedData.domain.verifyingContract === CONTRACT_ADDRESSES.LIMIT_ORDER_PROTOCOL);
+
+  // Get the raw order bytes for fillOrderTo using manual ABI encoding
+  // Grab the raw values from the 1inch LimitOrder instance
+  const orderStruct = order.build();
+  const {
+    makerAsset: orderMakerAsset,
+    takerAsset: orderTakerAsset,
+    makingAmount: orderMakingAmount,
+    takingAmount: orderTakingAmount,
+    maker: orderMaker,
+    receiver: orderReceiver,
+    salt: orderSalt,
+    // makerTraits: orderMakerTraits, // Removed as we get it from typedData
+  } = orderStruct;
+
+  // Use the local expiration variable that was calculated when creating the order
+  // The 1inch SDK bakes expiration into makerTraits, so we use our local expiration
+  const makerTraitsFromTypedData = BigInt(typedData.message.makerTraits as string);
+
+  // Define the ABI parameters as individual fields (9 fields total)
+  const paramsDef = [
+    { type: 'address', name: 'makerAsset' },
+    { type: 'address', name: 'takerAsset' },
+    { type: 'uint256', name: 'makingAmount' },
+    { type: 'uint256', name: 'takingAmount' },
+    { type: 'address', name: 'maker' },
+    { type: 'address', name: 'receiver' },
+    { type: 'uint256', name: 'salt' },
+    { type: 'uint256', name: 'expiration' },
+    { type: 'uint256', name: 'makerTraits' },
+  ] as const;
+
+  // Encode all nine fields as individual parameters
+  const orderRaw = encodeAbiParameters(paramsDef, [
+    orderMakerAsset as `0x${string}`,
+    orderTakerAsset as `0x${string}`,
+    BigInt(orderMakingAmount),
+    BigInt(orderTakingAmount),
+    orderMaker as `0x${string}`,
+    orderReceiver as `0x${string}`,
+    BigInt(orderSalt),
+    expiration, // Use the local expiration variable
+    makerTraitsFromTypedData,
+  ]) as `0x${string}`;
+
+  console.log('🔍 orderRaw byteLength =', (orderRaw.length - 2) / 2, 'bytes'); // should be 288
+  console.log('🔍 orderRaw (first 100 chars):', orderRaw.slice(0, 100) + '...');
+  console.log('🔍 orderRaw (last 100 chars):', '...' + orderRaw.slice(-100));
+  
+  // Sanity checks for the encoding
+  console.log('🔍 SANITY CHECKS:');
+  console.log('🔍 Expected byte length (9 fields × 32 bytes):', 9 * 32, 'bytes');
+  console.log('🔍 Actual byte length:', (orderRaw.length - 2) / 2, 'bytes');
+  console.log('🔍 Byte length correct:', (orderRaw.length - 2) / 2 === 288);
+  
+  // Verify parameter order matches the on-chain struct
+  console.log('🔍 PARAMETER ORDER VERIFICATION:');
+  console.log('🔍 1. makerAsset:', orderMakerAsset);
+  console.log('🔍 2. takerAsset:', orderTakerAsset);
+  console.log('🔍 3. makingAmount:', orderMakingAmount);
+  console.log('🔍 4. takingAmount:', orderTakingAmount);
+  console.log('🔍 5. maker:', orderMaker);
+  console.log('🔍 6. receiver:', orderReceiver);
+  console.log('🔍 7. salt:', orderSalt);
+  console.log('🔍 8. expiration:', expiration.toString());
+  console.log('🔍 9. makerTraits:', makerTraitsFromTypedData.toString());
+  
+  // Verify all addresses are valid
+  console.log('🔍 ADDRESS VALIDATION:');
+  console.log('🔍 makerAsset valid:', orderMakerAsset && orderMakerAsset.length === 42);
+  console.log('🔍 takerAsset valid:', orderTakerAsset && orderTakerAsset.length === 42);
+  console.log('🔍 maker valid:', orderMaker && orderMaker.length === 42);
+  console.log('🔍 receiver valid:', orderReceiver && orderReceiver.length === 42);
+  
+  // Verify all BigInt values are positive
+  console.log('🔍 VALUE VALIDATION:');
+  console.log('🔍 makingAmount > 0:', BigInt(orderMakingAmount) > 0n);
+  console.log('🔍 takingAmount > 0:', BigInt(orderTakingAmount) > 0n);
+  console.log('🔍 salt > 0:', BigInt(orderSalt) > 0n);
+  console.log('🔍 expiration > current time:', expiration > BigInt(Math.floor(Date.now() / 1000)));
+  console.log('🔍 makerTraits >= 0:', makerTraitsFromTypedData >= 0n);
+  
+  // CRITICAL: Verify no undefined values before encoding
+  console.log('🔍 UNDEFINED CHECK - Raw values before encoding:');
+  console.log('🔍 orderMakerAsset:', orderMakerAsset, 'type:', typeof orderMakerAsset);
+  console.log('🔍 orderTakerAsset:', orderTakerAsset, 'type:', typeof orderTakerAsset);
+  console.log('🔍 orderMakingAmount:', orderMakingAmount, 'type:', typeof orderMakingAmount);
+  console.log('🔍 orderTakingAmount:', orderTakingAmount, 'type:', typeof orderTakingAmount);
+  console.log('🔍 orderMaker:', orderMaker, 'type:', typeof orderMaker);
+  console.log('🔍 orderReceiver:', orderReceiver, 'type:', typeof orderReceiver);
+  console.log('🔍 orderSalt:', orderSalt, 'type:', typeof orderSalt);
+  console.log('🔍 expiration:', expiration, 'type:', typeof expiration);
+  console.log('🔍 makerTraitsFromTypedData:', makerTraitsFromTypedData, 'type:', typeof makerTraitsFromTypedData);
+  
+  // Check for any undefined values
+  const values = [
+    orderMakerAsset, orderTakerAsset, orderMakingAmount, orderTakingAmount,
+    orderMaker, orderReceiver, orderSalt, expiration, makerTraitsFromTypedData
+  ];
+  const hasUndefined = values.some(val => val === undefined);
+  console.log('🔍 Has undefined values:', hasUndefined);
+  if (hasUndefined) {
+    console.error('❌ CRITICAL ERROR: Found undefined values in order encoding!');
+    throw new Error('Cannot encode order with undefined values');
+  }
+
+  // Raw order bytes ready for fillOrderTo
 
   const orderObject = { 
     ...typedData.message, 
@@ -161,6 +313,7 @@ export async function buildAndSignOrderV2(
     // Ensure permit and interactions are included in the returned order object for Supabase
     permit: permitSignature,
     interactions: interactions,
+    rawOrder: orderRaw, // Add raw order bytes for fillOrderTo
   };
   
   console.log('🔍 Final order object debug:', {
@@ -169,8 +322,55 @@ export async function buildAndSignOrderV2(
     interactions: orderObject.interactions,
     interactionsLength: orderObject.interactions ? orderObject.interactions.length : 0,
     hasPermit: !!orderObject.permit && orderObject.permit !== "0x",
-    hasInteractions: !!orderObject.interactions && orderObject.interactions !== "0x"
+    hasInteractions: !!orderObject.interactions && orderObject.interactions !== "0x",
+    rawOrder: orderObject.rawOrder,
+    rawOrderLength: orderObject.rawOrder ? orderObject.rawOrder.length : 0
   });
+  
+                  // Validate order hash with on-chain getOrderHash (struct version)
+                console.log('🔍 VALIDATING order hash with on-chain getOrderHash(struct)...');
+                try {
+                  const orderStruct = {
+                    makerAsset: orderMakerAsset as `0x${string}`,
+                    takerAsset: orderTakerAsset as `0x${string}`,
+                    makingAmount: BigInt(orderMakingAmount),
+                    takingAmount: BigInt(orderTakingAmount),
+                    maker: orderMaker as `0x${string}`,
+                    receiver: orderReceiver as `0x${string}`,
+                    salt: BigInt(orderSalt),
+                    expiration: expiration,
+                    makerTraits: makerTraitsFromTypedData,
+                  };
+                  
+                  const onChainOrderHash = await publicClient.readContract({
+                    address: getAddress(CONTRACT_ADDRESSES.LIMIT_ORDER_PROTOCOL),
+                    abi: [{
+                      inputs: [{ components: [
+                        { name: 'makerAsset', type: 'address' },
+                        { name: 'takerAsset', type: 'address' },
+                        { name: 'makingAmount', type: 'uint256' },
+                        { name: 'takingAmount', type: 'uint256' },
+                        { name: 'maker', type: 'address' },
+                        { name: 'receiver', type: 'address' },
+                        { name: 'salt', type: 'uint256' },
+                        { name: 'expiration', type: 'uint256' },
+                        { name: 'makerTraits', type: 'uint256' },
+                      ], name: 'order', type: 'tuple' }],
+                      name: 'getOrderHash',
+                      outputs: [{ type: 'bytes32' }],
+                      stateMutability: 'view',
+                      type: 'function'
+                    }],
+                    functionName: 'getOrderHash',
+                    args: [orderStruct],
+                  });
+                  console.log('✅ getOrderHash(struct) SUCCESS - order encoding is correct!');
+                  console.log('🔍 On-chain order hash:', onChainOrderHash);
+                  console.log('🔍 SDK order hash:', orderHash);
+                  console.log('🔍 Hashes match:', onChainOrderHash === orderHash);
+                } catch (hashError) {
+                  console.warn('⚠️ getOrderHash(struct) failed – order encoding may be incorrect:', hashError);
+                }
   
   return { 
     order: orderObject, 
@@ -191,49 +391,49 @@ export async function fillOrderTxV2(
   console.log('🔍 Received order object:', order);
 
   try {
-    // Add debugging for token balance and allowance
-    const makerAsset = order.makerAsset as `0x${string}`;
-    const makingAmount = BigInt(order.makingAmount as string);
+    // Add debugging for token balance and allowance (TAKER side - what we need to provide)
+    const takerAsset = order.takerAsset as `0x${string}`;
+    const takingAmount = BigInt(order.takingAmount as string);
     
-    console.log('🔍 Checking token balance and allowance...');
-    console.log('🔍 Maker asset:', makerAsset);
-    console.log('🔍 Making amount:', makingAmount.toString());
+    console.log('🔍 Checking token balance and allowance for TAKER asset...');
+    console.log('🔍 Taker asset:', takerAsset);
+    console.log('🔍 Taking amount:', takingAmount.toString());
     
     if (!skipValidation) {
-      // Check token balance
-      if (makerAsset === '0x4200000000000000000000000000000000000006') { // WETH
+      // Check token balance (TAKER side)
+      if (takerAsset === '0x4200000000000000000000000000000000000006') { // WETH
         const ethBalance = await publicClient.getBalance({ address: account });
         console.log('🔍 ETH balance:', ethBalance.toString());
-        if (ethBalance < makingAmount) {
-          throw new Error(`Insufficient ETH balance. Required: ${makingAmount.toString()}, Available: ${ethBalance.toString()}`);
+        if (ethBalance < takingAmount) {
+          throw new Error(`Insufficient ETH balance. Required: ${takingAmount.toString()}, Available: ${ethBalance.toString()}`);
         }
       } else {
         // Check ERC20 balance
         const ERC20_ABI = await import('@/abis/ERC20.json');
         const tokenBalance = await publicClient.readContract({
-          address: makerAsset,
+          address: takerAsset,
           abi: ERC20_ABI.default,
           functionName: 'balanceOf',
           args: [account]
         }) as bigint;
         console.log('🔍 Token balance:', tokenBalance.toString());
-        if (tokenBalance < makingAmount) {
-          throw new Error(`Insufficient token balance. Required: ${makingAmount.toString()}, Available: ${tokenBalance.toString()}`);
+        if (tokenBalance < takingAmount) {
+          throw new Error(`Insufficient token balance. Required: ${takingAmount.toString()}, Available: ${tokenBalance.toString()}`);
         }
       }
       
-      // Check allowance for Limit Order Protocol
+      // Check allowance for Limit Order Protocol (TAKER side)
       const LIMIT_ORDER_PROTOCOL = getAddress(CONTRACT_ADDRESSES.LIMIT_ORDER_PROTOCOL);
       const ERC20_ABI = await import('@/abis/ERC20.json');
       const allowance = await publicClient.readContract({
-        address: makerAsset,
+        address: takerAsset,
         abi: ERC20_ABI.default,
         functionName: 'allowance',
         args: [account, LIMIT_ORDER_PROTOCOL]
       }) as bigint;
       console.log('🔍 Allowance for Limit Order Protocol:', allowance.toString());
-      if (allowance < makingAmount) {
-        throw new Error(`Insufficient allowance. Required: ${makingAmount.toString()}, Allowed: ${allowance.toString()}`);
+      if (allowance < takingAmount) {
+        throw new Error(`Insufficient allowance. Required: ${takingAmount.toString()}, Allowed: ${allowance.toString()}`);
       }
 
       // Check if order is expired
@@ -246,10 +446,10 @@ export async function fillOrderTxV2(
       }
 
       // Check if order is valid (non-zero amounts)
+      const makingAmount = BigInt(order.makingAmount as string);
       if (makingAmount === 0n) {
         throw new Error('Order has zero making amount');
       }
-      const takingAmount = BigInt(order.takingAmount as string);
       if (takingAmount === 0n) {
         throw new Error('Order has zero taking amount');
       }
@@ -270,15 +470,15 @@ export async function fillOrderTxV2(
     // Add balance and allowance checks before attempting to fill
     console.log('🔍 Pre-fill validation checks...');
     
-    // Check token balance
+    // Check token balance (TAKER side)
     let tokenBalance: bigint;
-    if (makerAsset === '0x4200000000000000000000000000000000000006') { // WETH
+    if (takerAsset === '0x4200000000000000000000000000000000000006') { // WETH
       tokenBalance = await publicClient.getBalance({ address: account });
       console.log('🔍 ETH balance:', tokenBalance.toString());
     } else {
       const ERC20_ABI = await import('@/abis/ERC20.json');
       tokenBalance = await publicClient.readContract({
-        address: makerAsset,
+        address: takerAsset,
         abi: ERC20_ABI.default,
         functionName: 'balanceOf',
         args: [account]
@@ -286,11 +486,11 @@ export async function fillOrderTxV2(
       console.log('🔍 Token balance:', tokenBalance.toString());
     }
     
-    // Check allowance for Limit Order Protocol
+    // Check allowance for Limit Order Protocol (TAKER side)
     const LIMIT_ORDER_PROTOCOL = getAddress(CONTRACT_ADDRESSES.LIMIT_ORDER_PROTOCOL);
     const ERC20_ABI = await import('@/abis/ERC20.json');
     const allowance = await publicClient.readContract({
-      address: makerAsset,
+      address: takerAsset,
       abi: ERC20_ABI.default,
       functionName: 'allowance',
       args: [account, LIMIT_ORDER_PROTOCOL]
@@ -306,21 +506,21 @@ export async function fillOrderTxV2(
     
     // Summary of validation
     console.log('🔍 Validation Summary:', {
-      hasSufficientBalance: tokenBalance >= makingAmount,
-      hasSufficientAllowance: allowance >= makingAmount,
+      hasSufficientBalance: tokenBalance >= takingAmount,
+      hasSufficientAllowance: allowance >= takingAmount,
       isNotExpired: currentTime <= expiration,
       balance: tokenBalance.toString(),
-      required: makingAmount.toString(),
+      required: takingAmount.toString(),
       allowance: allowance.toString(),
       expiration: expiration.toString(),
       currentTime: currentTime.toString()
     });
 
     // If allowance is insufficient, try to fix it
-    if (allowance < makingAmount) {
+    if (allowance < takingAmount) {
       console.log('🔧 Attempting to fix insufficient allowance...');
       console.log('🔧 Current allowance:', allowance.toString());
-      console.log('🔧 Required amount:', makingAmount.toString());
+      console.log('🔧 Required amount:', takingAmount.toString());
       
       try {
         // Create approval transaction
@@ -329,13 +529,13 @@ export async function fillOrderTxV2(
         const approveData = encodeFunctionData({
           abi: ERC20_ABI.default,
           functionName: 'approve',
-          args: [LIMIT_ORDER_PROTOCOL, makingAmount]
+          args: [LIMIT_ORDER_PROTOCOL, takingAmount]
         });
 
         console.log('🔧 Sending approval transaction...');
         const approveHash = await walletClient.sendTransaction({
           account,
-          to: makerAsset,
+          to: takerAsset,
           data: approveData,
           value: 0n,
           chain: base,
@@ -350,7 +550,7 @@ export async function fillOrderTxV2(
         
         // Check allowance again
         const newAllowance = await publicClient.readContract({
-          address: makerAsset,
+          address: takerAsset,
           abi: ERC20_ABI.default,
           functionName: 'allowance',
           args: [account, LIMIT_ORDER_PROTOCOL]
@@ -358,8 +558,8 @@ export async function fillOrderTxV2(
         
         console.log('🔧 New allowance:', newAllowance.toString());
         
-        if (newAllowance < makingAmount) {
-          throw new Error(`Allowance still insufficient after approval. New: ${newAllowance.toString()}, Required: ${makingAmount.toString()}`);
+        if (newAllowance < takingAmount) {
+          throw new Error(`Allowance still insufficient after approval. New: ${newAllowance.toString()}, Required: ${takingAmount.toString()}`);
         }
         
         console.log('✅ Allowance fixed successfully!');
@@ -369,117 +569,246 @@ export async function fillOrderTxV2(
       }
     }
 
-    // Get the full signature as a Uint8Array (65 bytes: 32 for r, 32 for s, 1 for v)
-    const fullSignatureBytes = hexToBytes(signature);
-    
-    // Extract r, s, and v components
-    const r = bytesToHex(fullSignatureBytes.slice(0, 32)) as `0x${string}`;
-    const s = bytesToHex(fullSignatureBytes.slice(32, 64)) as `0x${string}`;
-    const v = fullSignatureBytes[64];
-    
-    // Combine s and v into vs (s is 32 bytes, v is 1 byte)
-    // The v (recovery ID) is encoded into the last byte of s
-    const sBytes = fullSignatureBytes.slice(32, 64);
-    sBytes[31] = sBytes[31] | v; // OR the last byte of s with the recovery ID
-    const vs = bytesToHex(sBytes) as `0x${string}`;
-    
-    console.log('🔐 Signature components:', {
-      r,
-      s,
-      v,
-      vs,
-      fullSignature: signature
-    });
+
 
     // Import the contract ABI
     const LIMIT_ORDER_ABI = await import('@/abis/LimitOrderProtocol.json');
 
     // --- START: Dynamic Value for Native Token Swaps ---
     let txValue = 0n;
-    // Check if the makerAsset is WETH (native token on Base)
-    // Ensure order.makerAsset is a string and exists
-    if (order.makerAsset && typeof order.makerAsset === 'string' &&
-        order.makerAsset.toLowerCase() === CONTRACT_ADDRESSES.WETH.toLowerCase()) {
-      txValue = BigInt(order.makingAmount as string); // Use makingAmount from the order
-      console.log(`Detected WETH as makerAsset. Setting transaction value to: ${txValue.toString()}`);
+    // Check if the takerAsset is WETH (native token on Base) - we need to provide ETH as taker
+    // Ensure order.takerAsset is a string and exists
+    if (order.takerAsset && typeof order.takerAsset === 'string' &&
+        order.takerAsset.toLowerCase() === CONTRACT_ADDRESSES.WETH.toLowerCase()) {
+      txValue = BigInt(order.takingAmount as string); // Use takingAmount from the order
+      console.log(`Detected WETH as takerAsset. Setting transaction value to: ${txValue.toString()}`);
     }
     // --- END: Dynamic Value for Native Token Swaps ---
 
-    // Ensure all order fields are properly defined and converted to BigInt
-    const orderStruct = [
-      (order.makerAsset as string) || '0x0000000000000000000000000000000000000000',
-      (order.takerAsset as string) || '0x0000000000000000000000000000000000000000',
-      BigInt((order.makingAmount as string | number | bigint) || '0'),
-      BigInt((order.takingAmount as string | number | bigint) || '0'),
-      (order.maker as string) || '0x0000000000000000000000000000000000000000',
-      (order.receiver as string) || (order.maker as string) || '0x0000000000000000000000000000000000000000',
-      BigInt((order.salt as string | number | bigint) || '0'),
-      BigInt((order.expiration as string | number | bigint) || '0'),
-      BigInt((order.makerTraits as string | number | bigint) || '0')
-    ];
-
-    console.log('🔍 Order struct for fillOrder:', {
-      makerAsset: orderStruct[0],
-      takerAsset: orderStruct[1],
-      makingAmount: orderStruct[2].toString(),
-      takingAmount: orderStruct[3].toString(),
-      maker: orderStruct[4],
-      receiver: orderStruct[5],
-      salt: orderStruct[6].toString(),
-      expiration: orderStruct[7].toString(),
-      makerTraits: orderStruct[8].toString()
-    });
-
-    const fillOrderArgs = [
-      orderStruct, // The properly structured order tuple
-      r,           // r component
-      vs,          // s and v combined
-      BigInt((order.makingAmount as string | number | bigint) || '0'), // Amount to fill
-      0n,          // TakerTraits (0 for default)
-    ];
-
-    // Check if we have a Permit2 signature and use the appropriate function
-    const hasPermit2 = order.permit && order.permit !== "0x";
+    // Check if we have interactions and raw order data for fillOrderTo
     const hasInteractions = order.interactions && order.interactions !== "0x";
+    const hasRawOrder = order.rawOrder && order.rawOrder !== "0x";
     
-    console.log('🔍 Permit2 Debug:', {
-      hasPermit2,
+    console.log('🔍 fillOrderTo Debug:', {
       hasInteractions,
-      permit: order.permit,
-      permitLength: order.permit ? (order.permit as string).length : 0,
+      hasRawOrder,
       interactions: order.interactions,
-      interactionsLength: order.interactions ? (order.interactions as string).length : 0
+      interactionsLength: order.interactions ? (order.interactions as string).length : 0,
+      rawOrder: order.rawOrder,
+      rawOrderLength: order.rawOrder ? (order.rawOrder as string).length : 0
     });
     
-    // Use basic fillOrder since we disabled Permit2 and interactions
-    console.log('🔐 Using basic fillOrder...');
+    // Use fillOrderTo to enable hook interactions
+    console.log('🔐 Using fillOrderTo with hook interactions...');
+    
+    // Get the raw order bytes and interactions from the order object
+    const orderRaw = order.rawOrder as `0x${string}`;
+    // Temporarily disable interactions until basic fill works
+    const interactions: `0x${string}` = "0x";
+    
+    console.log('🔍 fillOrderTo parameters:', {
+      orderRaw,
+      orderRawLength: orderRaw ? orderRaw.length : 0,
+      signature,
+      signatureLength: signature.length,
+      interactions,
+      interactionsLength: interactions.length,
+      permit: "0x" // Empty permit for now
+    });
+    
+    const fillOrderToArgs = [
+      orderRaw,       // bytes - the ABI-encoded order
+      signature,      // bytes - full 65-byte EIP-712 signature
+      interactions,   // bytes - hook address + params
+      "0x"            // bytes - empty permit2 for now
+    ];
+    
+    console.log('🔍 Estimating gas for fillOrderTo...');
+    console.log('🔍 Contract address:', getAddress(CONTRACT_ADDRESSES.LIMIT_ORDER_PROTOCOL));
+    console.log('🔍 Function name: fillOrderTo');
+    console.log('🔍 Arguments:', fillOrderToArgs);
+    console.log('🔍 Transaction value:', txValue.toString());
+    
+    // First, simulate the call to get detailed revert information
+    console.log('🔍 Simulating fillOrderTo call to check for revert reasons...');
+    try {
+      await publicClient.simulateContract({
+        account,
+        address: getAddress(CONTRACT_ADDRESSES.LIMIT_ORDER_PROTOCOL),
+        abi: LIMIT_ORDER_ABI.default,
+        functionName: 'fillOrderTo',
+        args: fillOrderToArgs,
+        value: txValue,
+      });
+      console.log('✅ Simulation successful - no revert detected');
+    } catch (simulationError: any) {
+      console.error('❌ SIMULATION FAILED:');
+      console.error('❌ Simulation error:', simulationError);
+      
+      // Try to decode the revert reason
+      if (simulationError.cause?.raw) {
+        console.error('❌ Raw revert data:', simulationError.cause.raw);
+        try {
+          const { decodeErrorResult } = await import('viem');
+          const decodedError = decodeErrorResult({
+            abi: LIMIT_ORDER_ABI.default,
+            data: simulationError.cause.raw as `0x${string}`,
+          });
+          console.error('❌ Decoded revert reason:', decodedError);
+        } catch (decodeError) {
+          console.error('❌ Could not decode revert reason:', decodeError);
+        }
+      }
+      
+      // Check specific conditions that might cause silent reverts
+      console.log('🔍 Checking common revert conditions:');
+      
+      // 1. Check order hash
+      try {
+        const orderHash = await publicClient.readContract({
+          address: getAddress(CONTRACT_ADDRESSES.LIMIT_ORDER_PROTOCOL),
+          abi: LIMIT_ORDER_ABI.default,
+          functionName: 'getOrderHash',
+          args: [orderRaw],
+        });
+        console.log('🔍 Order hash from contract:', orderHash);
+      } catch (hashError) {
+        console.error('❌ Failed to get order hash:', hashError);
+      }
+      
+      // 2. Check remaining amount
+      try {
+        const orderHash = await publicClient.readContract({
+          address: getAddress(CONTRACT_ADDRESSES.LIMIT_ORDER_PROTOCOL),
+          abi: LIMIT_ORDER_ABI.default,
+          functionName: 'getOrderHash',
+          args: [orderRaw],
+        });
+        const remaining = await publicClient.readContract({
+          address: getAddress(CONTRACT_ADDRESSES.LIMIT_ORDER_PROTOCOL),
+          abi: LIMIT_ORDER_ABI.default,
+          functionName: 'remaining',
+          args: [orderHash],
+        }) as bigint;
+        console.log('🔍 Remaining amount:', remaining.toString());
+        if (remaining === 0n) {
+          console.error('❌ Order has no remaining amount to fill');
+        }
+      } catch (remainingError) {
+        console.error('❌ Failed to check remaining amount:', remainingError);
+      }
+      
+      // 3. Check expiration
+      const currentTime = BigInt(Math.floor(Date.now() / 1000));
+      console.log('🔍 Current timestamp:', currentTime.toString());
+      console.log('🔍 Order expiration:', expiration.toString());
+      console.log('🔍 Is expired:', currentTime > expiration);
+      
+      // 4. Check allowance (TAKER side)
+      try {
+        const allowance = await publicClient.readContract({
+          address: takerAsset,
+          abi: (await import('@/abis/ERC20.json')).default,
+          functionName: 'allowance',
+          args: [account, getAddress(CONTRACT_ADDRESSES.LIMIT_ORDER_PROTOCOL)],
+        }) as bigint;
+        console.log('🔍 Allowance for Limit Order Protocol:', allowance.toString());
+        console.log('🔍 Required amount:', takingAmount.toString());
+        console.log('🔍 Has sufficient allowance:', allowance >= takingAmount);
+      } catch (allowanceError) {
+        console.error('❌ Failed to check allowance:', allowanceError);
+      }
+      
+      // 5. Check balance (TAKER side)
+      try {
+        let balance: bigint;
+        if (takerAsset === '0x4200000000000000000000000000000000000006') { // WETH
+          balance = await publicClient.getBalance({ address: account });
+        } else {
+          balance = await publicClient.readContract({
+            address: takerAsset,
+            abi: (await import('@/abis/ERC20.json')).default,
+            functionName: 'balanceOf',
+            args: [account],
+          }) as bigint;
+        }
+        console.log('🔍 Balance:', balance.toString());
+        console.log('🔍 Required amount:', takingAmount.toString());
+        console.log('🔍 Has sufficient balance:', balance >= takingAmount);
+      } catch (balanceError) {
+        console.error('❌ Failed to check balance:', balanceError);
+      }
+      
+      throw new Error(`Simulation failed: ${simulationError.message}`);
+    }
     
     const estimatedGas = await publicClient.estimateContractGas({
       account,
       address: getAddress(CONTRACT_ADDRESSES.LIMIT_ORDER_PROTOCOL),
       abi: LIMIT_ORDER_ABI.default,
-      functionName: 'fillOrder',
-      args: fillOrderArgs, // Pass the correct arguments here
-      value: txValue, // Use the dynamically determined value here
+      functionName: 'fillOrderTo',
+      args: fillOrderToArgs,
+      value: txValue,
     });
 
+    console.log('🔍 Estimated gas:', estimatedGas.toString());
     const finalGasLimit = estimatedGas + (estimatedGas / 5n); // Add 20% buffer
+    console.log('🔍 Final gas limit (with 20% buffer):', finalGasLimit.toString());
+
+    console.log('🔍 Sending fillOrderTo transaction...');
+    console.log('🔍 Transaction parameters:', {
+      account,
+      address: getAddress(CONTRACT_ADDRESSES.LIMIT_ORDER_PROTOCOL),
+      functionName: 'fillOrderTo',
+      args: fillOrderToArgs,
+      value: txValue.toString(),
+      gas: finalGasLimit.toString(),
+      chain: base.id
+    });
 
     const txHash = await walletClient.writeContract({
       account,
       address: getAddress(CONTRACT_ADDRESSES.LIMIT_ORDER_PROTOCOL),
       abi: LIMIT_ORDER_ABI.default,
-      functionName: 'fillOrder',
-      args: fillOrderArgs, // And here for the actual transaction
-      value: txValue, // And here for the actual transaction
+      functionName: 'fillOrderTo',
+      args: fillOrderToArgs,
+      value: txValue,
       gas: finalGasLimit,
       chain: base,
     });
 
     console.log('✅ Order filled successfully:', txHash);
+    console.log('✅ Transaction hash:', txHash);
     return txHash;
   } catch (err: unknown) {
-    console.error('💥 fillOrder failed:', err);
+    console.error('💥 FILLORDER FAILED:');
+    console.error('💥 Error type:', typeof err);
+    console.error('💥 Error constructor:', err?.constructor?.name);
+    console.error('💥 Error message:', err instanceof Error ? err.message : String(err));
+    console.error('💥 Error stack:', err instanceof Error ? err.stack : 'No stack trace');
+    console.error('💥 Full error object:', err);
+    
+    // Try to extract more details from the error
+    if (err && typeof err === 'object') {
+      console.error('💥 Error properties:', Object.keys(err));
+      try {
+        console.error('💥 Error details:', JSON.stringify(err, null, 2));
+      } catch (jsonError) {
+        console.error('💥 Could not stringify error:', jsonError);
+      }
+    }
+    
+    // Check for specific error types
+    if (err && typeof err === 'object' && 'code' in err) {
+      console.error('💥 Error code:', (err as any).code);
+    }
+    if (err && typeof err === 'object' && 'reason' in err) {
+      console.error('💥 Error reason:', (err as any).reason);
+    }
+    if (err && typeof err === 'object' && 'data' in err) {
+      console.error('💥 Error data:', (err as any).data);
+    }
+    
     throw new Error(`fillOrder failed: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
@@ -495,34 +824,4 @@ export async function remainingV2(publicClient: PublicClient, orderHash: `0x${st
   }) as Promise<bigint>;
 }
 
-// Test function to verify 1inch SDK integration
-export async function test1inchSDK() {
-  try {
-    console.log('🧪 Testing 1inch SDK integration...');
-    
-    // Create a simple test order
-    const testOrder = new LimitOrder({
-      makerAsset: new Address('0x4200000000000000000000000000000000000006'), // WETH on Base
-      takerAsset: new Address('0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'), // USDC on Base
-      makingAmount: 1000000000000000000n, // 1 WETH
-      takingAmount: 2000000000n, // 2000 USDC (6 decimals)
-      maker: new Address('0x0000000000000000000000000000000000000000'), // Test address
-      receiver: new Address('0x0000000000000000000000000000000000000000'),
-      salt: 123456789n,
-    }, MakerTraits.default());
-
-    const typedData = testOrder.getTypedData(base.id);
-    const orderHash = testOrder.getOrderHash(base.id);
-
-    console.log('✅ 1inch SDK test successful:', {
-      domain: typedData.domain,
-      orderHash,
-      hasTypedData: !!typedData
-    });
-
-    return true;
-  } catch (error) {
-    console.error('❌ 1inch SDK test failed:', error);
-    return false;
-  }
-} 
+ 

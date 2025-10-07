@@ -252,15 +252,8 @@ function FeedNowSection({ navigate }: { navigate: (path: string) => void }) {
             return;
         }
 
-        const selectedOptionData = swapOptions.find(option => option.id === selectedOption);
 
-        if (selectedOptionData?.comingSoon) {
-            toast({
-                title: 'Coming Soon!',
-                description: `${selectedOptionData.title} setup is available but the feature is not yet live.`,
-                variant: 'default'
-            });
-        }
+
 
         if (selectedOption === 'regular') {
             navigate('/regular-swap');
